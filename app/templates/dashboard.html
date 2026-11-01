@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ character.name }} – {{ app_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Char-Dashboard</div><h1>{{ character.name }}</h1>
+{% if motd %}<div class="notice"><strong>MOTD</strong><br>{{ motd }}</div>{% endif %}
+<div class="grid two">
+  <section class="panel">
+    <div style="display:flex;align-items:center;gap:1rem">
+      <img src="https://images.evetech.net/characters/{{ character_id }}/portrait?size=128" width="72" height="72" alt="Porträt von {{ character.name }}" style="border-radius:.7rem;background:#111b29">
+      <div><div class="eyebrow">Hauptcharakter</div><h2 style="margin:.3rem 0">{{ character.name }}</h2><span class="pill">Sec {{ "%.2f"|format(character.security_status or 0) }}</span></div>
+    </div>
+    {% if active_character and not active_character.is_main %}<p class="hint">Ausgewählter Alt-Charakter</p>{% endif %}
+    {% if selected_profile.total_skill_points is not none %}
+      <p class="hint">Skillpunkte {{ "{:,}".format(selected_profile.total_skill_points).replace(",", ".") }}</p>
+    {% endif %}
+  </section>
+  <section class="panel">
+    <div class="eyebrow">Corporation</div>
+    {% if corporation %}
+      <div style="display:flex;align-items:center;gap:1rem;margin-top:.5rem">
+        <img src="https://images.evetech.net/corporations/{{ corporation.corporation_id }}/logo?size=64" width="48" height="48" alt="Logo von {{ corporation.name }}" style="border-radius:.5rem;background:#111b29">
+        <div><h2 style="margin:0">{{ corporation.name }} [{{ corporation.ticker }}]</h2><span class="hint">{{ corporation.member_count }} Mitglieder{% if corporation.date_founded %} · Dabei seit {{ corporation.date_founded[:10] }}{% endif %}</span></div>
+      </div>
+      {% if ceo %}<p>CEO: {{ ceo.name }}</p>{% endif %}
+      {% if alliance %}
+        <p>Allianz: <img src="https://images.evetech.net/alliances/{{ alliance.alliance_id }}/logo?size=32" width="22" height="22" alt="" style="vertical-align:middle;border-radius:.2rem"> {{ alliance.name }} [{{ alliance.ticker }}] · {{ alliance.executor_corporation_id and "Mitglied" or "" }}</p>
+      {% endif %}
+    {% else %}<p class="muted">Corporation nicht verfügbar.</p>{% endif %}
+  </section>
+</div>
+<section class="panel" style="margin-top:1rem">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem"><h2>Charaktere</h2><a href="/auth/chars">Verwalten</a></div>
+  <div class="grid">
+  {% for profile in profiles %}
+    <article class="card">
+      <div style="display:flex;align-items:center;gap:.8rem">
+        <img src="https://images.evetech.net/characters/{{ profile.id }}/portrait?size=64" width="42" height="42" alt="" style="border-radius:.5rem">
+        <div style="flex:1"><strong>{{ profile.name }}</strong><div class="hint">{{ "Main" if profile.is_main else "Alt" }} · Sec {{ "%.2f"|format(profile.character.security_status or 0) }}{% if profile.corporation %} · {{ profile.corporation.name }} [{{ profile.corporation.ticker }}]{% endif %}</div></div>
+        {% if profile.id != character_id %}<form method="post" action="/auth/chars/select"><input type="hidden" name="character_id" value="{{ profile.id }}"><button>Auswählen</button></form>{% endif %}
+      </div>
+      {% if profile.queue %}
+        <div style="margin-top:.8rem">
+          {% for entry in profile.queue[:1] %}
+            <span class="pill good">Skillqueue: {{ entry.skill_name }} {{ ["0","I","II","III","IV","V"][entry.finished_level] if entry.finished_level in range(0,6) else entry.finished_level }}</span>
+            {% if entry.finish_date %}<span class="hint"> · Fertig {{ entry.finish_date[:16]|replace("T"," ") }} UTC</span>{% endif %}
+          {% endfor %}
+        </div>
+      {% elif profile.total_skill_points is none %}
+        <p class="hint">Skilldaten benötigen eine EVE-SSO-Anmeldung mit passenden Scopes.</p>
+      {% else %}<p class="hint">Skillqueue pausiert.</p>{% endif %}
+    </article>
+  {% endfor %}
+  </div>
+</section>
+<section class="panel" style="margin-top:1rem">
+  <div style="display:flex;justify-content:space-between;align-items:center"><h2>Skill-Warteschlange – {{ character.name }}</h2><a href="/skills">Skillübersicht öffnen</a></div>
+  {% if queue %}
+  <div class="table-wrap"><table><thead><tr><th>#</th><th>Skill</th><th>Level</th><th>Abschluss (UTC)</th></tr></thead><tbody>
+    {% for entry in queue %}<tr><td>{{ entry.queue_position + 1 }}</td><td>{{ entry.skill_name }}</td><td>{{ ["0","I","II","III","IV","V"][entry.finished_level] if entry.finished_level in range(0,6) else entry.finished_level }}</td><td>{{ entry.finish_date[:16]|replace("T"," ") if entry.finish_date else "—" }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<p class="muted">Keine Skillqueue verfügbar. Prüfe, ob der Charakter die Scopes `esi-skills.read_skillqueue.v1` und `esi-skills.read_skills.v1` erteilt hat.</p>{% endif %}
+</section>
+{% endblock %}

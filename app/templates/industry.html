@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Industry – {{ app_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Char-Dashboard · Produktion</div><h1>Industry</h1>
+<form method="post" action="/industry/calculate">
+  <section class="panel" style="margin-bottom:1rem">
+    <div class="form-grid">
+      <label>Schiff oder Modul<input name="product_name" required value="{{ form_data.product_name or '' }}" placeholder="z. B. Hulk oder Damage Control II"></label>
+      <label>Läufe (Runs)<input type="number" name="runs" min="1" max="10000" value="{{ form_data.runs or 1 }}" required></label>
+      <label>Produktionsart<select name="production_type"><option value="manufacturing" {% if form_data.production_type != 'reaction' %}selected{% endif %}>Herstellung</option><option value="reaction" {% if form_data.production_type == 'reaction' %}selected{% endif %}>Reaktion</option></select></label>
+      <label>Skills<select name="skill_mode"><option value="character" {% if form_data.get('skill_mode','character') == 'character' %}selected{% endif %}>Gewählter Charakter</option><option value="max" {% if form_data.skill_mode == 'max' %}selected{% endif %}>Alle Level 5</option><option value="none" {% if form_data.skill_mode == 'none' %}selected{% endif %}>Keine Skills</option></select></label>
+      <label>Decryptor (Erfindung)<select name="decryptor"><option value="">Kein Decryptor</option>{% for name in decryptors %}<option value="{{ name }}" {% if form_data.decryptor == name %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+      <label>Sicherheitsklasse<select name="security"><option value="high" {% if form_data.security == 'high' %}selected{% endif %}>Highsec</option><option value="low" {% if form_data.security == 'low' %}selected{% endif %}>Lowsec</option><option value="null" {% if form_data.security == 'null' %}selected{% endif %}>Nullsec / Wurmloch</option></select></label>
+    </div>
+    <div class="form-actions">
+      <label style="display:flex;align-items:center;gap:.55rem"><input type="checkbox" name="build_components" value="true" {% if form_data.build_components %}checked{% endif %}>Komponenten herstellen statt kaufen</label>
+      <label style="display:flex;align-items:center;gap:.55rem"><input type="checkbox" name="invention" value="true" {% if form_data.invention %}checked{% endif %}>T2-Erfindung einrechnen (ME/TE kommen dann aus der Erfindung)</label>
+      <label style="display:flex;align-items:center;gap:.55rem"><input type="checkbox" name="include_stock" value="true" {% if form_data.include_stock %}checked{% endif %}>Lagerbestand aller Charaktere dieses Kontos zusammenzählen</label>
+    </div>
+  </section>
+  <div class="grid two">
+    <section class="panel">
+      <h2>Produkt</h2><div class="form-grid">
+        <label>ME (Materialeffizienz) %<input type="number" name="product_me" min="0" max="100" step=".01" value="{{ form_data.product_me or 0 }}"></label>
+        <label>TE (Zeiteffizienz) %<input type="number" name="product_te" min="0" max="100" step=".01" value="{{ form_data.product_te or 0 }}"></label>
+      </div>
+      <h2 style="margin-top:1.2rem">Komponenten</h2><div class="form-grid">
+        <label>ME Komponenten %<input type="number" name="component_me" min="0" max="100" step=".01" value="{{ form_data.component_me or 0 }}"></label>
+        <label>TE Komponenten %<input type="number" name="component_te" min="0" max="100" step=".01" value="{{ form_data.component_te or 0 }}"></label>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>Standort &amp; Boni</h2><div class="form-grid">
+        <label>Systemkostenindex %<input type="number" name="system_cost_index" min="0" max="100" step=".01" value="{{ form_data.system_cost_index or 0 }}"></label>
+        <label>Auftragskostenbonus %<input type="number" name="cost_bonus" min="0" max="100" step=".01" value="{{ form_data.cost_bonus or 0 }}"></label>
+        <label>Gebäude-Materialbonus %<input type="number" name="structure_material_bonus" min="0" max="100" step=".01" value="{{ form_data.structure_material_bonus or 0 }}"></label>
+        <label>Gebäude-Zeitbonus %<input type="number" name="structure_time_bonus" min="0" max="100" step=".01" value="{{ form_data.structure_time_bonus or 0 }}"></label>
+        <label>Rig-Materialbonus %<input type="number" name="rig_material_bonus" min="0" max="100" step=".01" value="{{ form_data.rig_material_bonus or 0 }}"></label>
+        <label>Rig-Zeitbonus %<input type="number" name="rig_time_bonus" min="0" max="100" step=".01" value="{{ form_data.rig_time_bonus or 0 }}"></label>
+        <label>Gebäudesteuer %<input type="number" name="tax_rate" min="0" max="100" step=".01" value="{{ form_data.get('tax_rate',0.25) }}"></label>
+      </div>
+    </section>
+  </div>
+  <div class="form-actions"><button class="primary">Produktionsplan berechnen</button></div>
+</form>
+{% if result %}
+  {% if skill_note %}<p class="notice">{{ skill_note }}</p>{% endif %}
+  {% if result.invention and result.invention.missing_skills %}<p class="notice error">Erfindung mit diesen Skills nicht möglich. Es fehlt: {{ result.invention.missing_skills|join(", ") }}.</p>{% endif %}
+  {% if result.invention and result.invention.missing_prices %}<p class="notice error">Kein Preis für Erfindungs-Material: {{ result.invention.missing_prices|join(", ") }}.</p>{% endif %}
+  {% if stock_warning %}<p class="notice">{{ stock_warning }}</p>{% endif %}
+  {% if result.missing_prices %}<p class="notice error">Kein Preis für: {{ result.missing_prices|join(", ") }}. Gesamtkosten und Marge sind deshalb nicht vollständig berechenbar.</p>{% endif %}
+  {% if result.missing_adjusted_prices %}<p class="notice error">Für {{ result.missing_adjusted_prices|length }} EIV-Materialien fehlen angepasste ESI-Preise; Auftragskosten sind unvollständig.</p>{% endif %}
+  <section class="panel" style="margin-top:1.25rem">
+    <h2>{{ result.product }} · {{ result.output_quantity }} Stück · {{ result.runs }} Lauf/Läufe</h2>
+    <div class="grid three">
+      <div class="card"><span class="eyebrow">Materialkosten (Jita)</span><p><strong>{{ result.material_cost|isk if result.material_cost is not none else "Unvollständig" }}{% if result.material_cost is not none %} ISK{% endif %}</strong></p></div>
+      <div class="card"><span class="eyebrow">Auftragskosten</span><p><strong>{{ result.job_cost|isk if result.job_cost is not none else "Nicht berechenbar" }}{% if result.job_cost is not none %} ISK{% endif %}</strong></p><span class="hint">EIV × (Index × (1 − Kostenbonus) + Steuer + 4 % SCC)</span></div>
+      <div class="card"><span class="eyebrow">Gesamtkosten</span><p><strong>{{ result.total_cost|isk if result.total_cost is not none else "Unvollständig" }}{% if result.total_cost is not none %} ISK{% endif %}</strong></p></div>
+      <div class="card"><span class="eyebrow">Noch zu kaufen</span><p><strong>{{ result.to_buy_cost|isk if result.to_buy_cost is not none else "Unvollständig" }}{% if result.to_buy_cost is not none %} ISK{% endif %}</strong></p></div>
+      <div class="card"><span class="eyebrow">Produktwert (Jita)</span><p><strong>{{ result.product_value|isk if result.product_value is not none else "Kein Preis" }}{% if result.product_value is not none %} ISK{% endif %}</strong></p></div>
+      <div class="card"><span class="eyebrow">Marge</span><p><strong>{{ result.margin|isk if result.margin is not none else "Nicht berechenbar" }}{% if result.margin is not none %} ISK{% endif %}</strong></p></div>
+      <div class="card"><span class="eyebrow">Dauer (nacheinander)</span><p><strong>{{ result.sequential_seconds|duration }}</strong></p></div>
+      <div class="card"><span class="eyebrow">Dauer (parallel, längste Kette)</span><p><strong>{{ result.critical_seconds|duration }}</strong></p></div>
+    </div>
+  </section>
+  {% if result.invention %}{% set inv = result.invention %}
+  <section class="panel" style="margin-top:1rem"><h2>Erfindung (T2)</h2>
+    <p class="hint">Erfolgswahrscheinlichkeit {{ "%.1f"|format(inv.probability * 100) }} % (Basis {{ "%.0f"|format(inv.base_probability * 100) }} %){% if inv.decryptor %} · {{ inv.decryptor }}{% endif %} · Ergebnis-BPC: {{ inv.bpc_runs }} Läufe, ME {{ inv.me }}, TE {{ inv.te }} · {{ inv.blueprint_copies }} BPC nötig · erwartete Versuche {{ "%.1f"|format(inv.attempts) }} · Dauer je Versuch {{ inv.time_seconds|duration }}</p>
+    <div class="table-wrap"><table><thead><tr><th>Material</th><th>Erwartete Menge</th><th>Jita / Stk.</th><th>Kosten</th></tr></thead><tbody>
+      {% for line in inv.lines %}<tr><td>{{ line.name }}</td><td>{{ "%.1f"|format(line.quantity) }}</td><td>{{ line.unit_price|isk if line.unit_price is not none else "—" }}</td><td>{{ line.total_cost|isk if line.total_cost is not none else "—" }}</td></tr>{% endfor %}
+      <tr><td>Auftragskosten Erfindung</td><td></td><td></td><td>{{ inv.job_cost|isk if inv.job_cost is not none else "—" }}</td></tr>
+      <tr><th>Gesamt Erfindung</th><th></th><th></th><th>{{ inv.total_cost|isk if inv.total_cost is not none else "Unvollständig" }}</th></tr>
+    </tbody></table></div>
+    <p class="hint">Gesamtkosten oben enthalten die Erfindungskosten. Blueprint-Kopierkosten sind nicht eingerechnet.</p>
+  </section>{% endif %}
+  <section class="panel" style="margin-top:1rem"><h2>Produktionsschritte</h2><div class="table-wrap"><table><thead><tr><th>Schritt</th><th>Art</th><th>Läufe</th><th>Menge</th><th>Dauer</th></tr></thead><tbody>
+    {% for step in result.steps %}<tr><td>{% for _ in range(step.depth) %}↳ {% endfor %}{{ step.name }}</td><td>{{ step.activity }}</td><td>{{ step.runs }}</td><td>{{ step.quantity }}</td><td>{{ step.seconds|duration }}</td></tr>{% endfor %}
+  </tbody></table></div></section>
+  <section class="panel" style="margin-top:1rem"><h2>Materialliste (zu beschaffen)</h2><div class="table-wrap"><table><thead><tr><th>Material</th><th>Bedarf</th><th>Lager</th><th>Fehlt</th><th>Jita / Stk.</th><th>Kosten fehlend</th><th>Kosten gesamt</th></tr></thead><tbody>
+    {% for item in result.materials %}<tr><td>{{ item.name }}</td><td>{{ item.quantity }}</td><td>{{ item.stock }}</td><td>{{ item.to_buy }}</td><td>{{ item.unit_price|isk if item.unit_price is not none else "—" }}</td><td>{{ item.to_buy_cost|isk if item.to_buy_cost is not none else "—" }}</td><td>{{ item.total_cost|isk if item.total_cost is not none else "—" }}</td></tr>
+    {% else %}<tr><td colspan="7" class="muted">Für dieses Produkt sind keine Rohmaterialien hinterlegt.</td></tr>{% endfor %}
+  </tbody></table></div><p class="hint">Preise: Jita 4-4, niedrigster Verkaufspreis; ESI-Adjusted-Preis als Fallback. Zeiten enthalten TE-, Gebäude-, Rig- und Skill-Boni (Zeitfaktor Skills: {{ "%.1f"|format(result.skill_time_factor * 100) }} %); Boni wirken multiplikativ.</p></section>
+{% endif %}
+{% endblock %}

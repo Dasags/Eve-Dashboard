@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Incursion – {{ app_name }}{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:end;gap:1rem;flex-wrap:wrap">
+  <div><div class="eyebrow">Öffentliche ESI-Daten</div><h1>Incursion</h1></div>
+  <div class="hint">Aktualisiert {{ now if now else "automatisch alle 2 Minuten" }} · {{ incursions|length }} Incursions</div>
+</div>
+{% if incursions %}
+<div class="grid three">
+{% for incursion in incursions %}
+  <article class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
+      <h2>{{ incursion.constellation }}</h2>
+      <span class="pill {% if incursion.state == 'Etabliert' %}good{% endif %}">{{ incursion.state }}</span>
+    </div>
+    <p class="hint" style="margin:.2rem 0 1rem">{{ incursion.region }}</p>
+    <dl style="display:grid;grid-template-columns:1fr auto;gap:.5rem;font-size:.9rem">
+      <dt class="hint">Staging-System</dt><dd style="margin:0">{{ incursion.staging }} <span class="hint">{{ "%.1f"|format(incursion.staging_security or 0) }}</span></dd>
+      <dt class="hint">Fraktion</dt><dd style="margin:0">{{ incursion.faction }}</dd>
+      <dt class="hint">Boss</dt><dd style="margin:0">{{ "Vorhanden" if incursion.has_boss else "Nicht vorhanden" }}</dd>
+      <dt class="hint">Befallene Systeme</dt><dd style="margin:0">{{ incursion.infested|length }}</dd>
+    </dl>
+    <div style="margin-top:1rem">
+      <div style="display:flex;justify-content:space-between;margin-bottom:.35rem"><span class="hint">Einfluss</span><strong>{{ incursion.influence }} %</strong></div>
+      <div style="height:.45rem;background:#253348;border-radius:99px;overflow:hidden"><div style="height:100%;width:{{ [incursion.influence,100]|min }}%;background:#58a6ff"></div></div>
+    </div>
+    <details style="margin-top:1rem">
+      <summary style="cursor:pointer;color:#aab8ca">Befallene Systeme anzeigen</summary>
+      <ul class="hint">{% for system in incursion.infested %}<li>{{ system.name }} · {{ "%.1f"|format(system.security or 0) }}</li>{% endfor %}</ul>
+    </details>
+  </article>
+{% endfor %}
+</div>
+{% else %}<section class="panel"><p>ESI meldet derzeit keine aktiven Incursions.</p></section>{% endif %}
+<p class="hint" style="margin-top:1rem">Daten aus der öffentlichen EVE-ESI-API; sie werden serverseitig alle zwei Minuten aktualisiert.</p>
+<script>setTimeout(()=>location.reload(),120000);</script>
+{% endblock %}
