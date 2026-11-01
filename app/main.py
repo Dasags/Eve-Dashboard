@@ -471,23 +471,33 @@ async def wallet_page(request: Request, view: str = "journal"):
             } | {
                 item.get("location_id") for item in transactions if item.get("location_id")
             }
-            names = await resolve_names(esi, related_ids)
+            names = {}
+            name_lookup_warning = None
+            try:
+                names = await resolve_names(esi, related_ids)
+            except httpx.HTTPStatusError as exc:
+                name_lookup_warning = (
+                    f"Wallet-Daten wurden geladen, aber ESI konnte Namen nicht auflösen "
+                    f"(HTTP {exc.response.status_code}, {exc.request.url.path}). "
+                    "Einträge werden mit IDs angezeigt."
+                )
     except httpx.HTTPStatusError as exc:
+        detail = exc.response.text.strip().replace("\n", " ")[:240]
+        endpoint = exc.request.url.path
         if exc.response.status_code == 403:
             wallet_error = (
-                "EVE hat den Zugriff verweigert (403). Prüfe auf der Charaktere-Seite, "
-                "ob esi-wallet.read_character_wallet.v1 gespeichert ist, und autorisiere "
-                "den Charakter nach dem Update erneut."
+                f"EVE hat den Zugriff verweigert (403) bei {endpoint}. Prüfe auf der "
+                "Charaktere-Seite den Scope esi-wallet.read_character_wallet.v1."
             )
         elif exc.response.status_code == 401:
             wallet_error = (
-                "EVE hat die Anmeldung abgelehnt (401). Bitte den Charakter erneut "
-                "über EVE SSO autorisieren."
+                f"EVE hat die Anmeldung abgelehnt (401) bei {endpoint}. "
+                "Bitte den Charakter erneut über EVE SSO autorisieren."
             )
         else:
             wallet_error = (
-                f"ESI konnte Wallet-Daten nicht liefern (HTTP {exc.response.status_code}). "
-                "Bitte später erneut versuchen."
+                f"ESI-Fehler HTTP {exc.response.status_code} bei {endpoint}."
+                + (f" Antwort: {detail}" if detail else "")
             )
         return render(
             request,
@@ -542,6 +552,7 @@ async def wallet_page(request: Request, view: str = "journal"):
         income_30=income,
         expenses_30=expenses,
         net_30=income - expenses,
+        name_lookup_warning=name_lookup_warning,
     )
 
 

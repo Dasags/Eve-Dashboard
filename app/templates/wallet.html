@@ -7,6 +7,7 @@
 {% elif wallet_error %}
 <section class="panel"><h2>Wallet konnte nicht geladen werden</h2><p class="muted">{{ wallet_error }}</p><a class="button primary" href="/auth/chars">Scopes prüfen</a><a class="button" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
 {% else %}
+{% if name_lookup_warning %}<section class="panel"><p class="hint">{{ name_lookup_warning }}</p></section>{% endif %}
 <div class="grid two">
   <section class="panel"><div class="eyebrow">Kontostand</div><div style="font-size:1.75rem;font-weight:700;margin-top:.4rem">{{ wallet|isk }} ISK</div></section>
   <section class="panel"><div class="eyebrow">Letzte 30 Tage</div>
