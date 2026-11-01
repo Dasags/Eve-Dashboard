@@ -18,7 +18,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.services import storage
-from app.services.eve import ESIClient, authorization_url, exchange_code
+from app.services.eve import SCOPE_NAMES, ESIClient, authorization_url, exchange_code
 from app.services.incursions import get_incursions
 from app.services.killfeed import get_kills
 from app.services.map_data import get_map_data
@@ -245,7 +245,7 @@ async def auth_callback(
 @app.get("/auth/chars")
 def characters_page(request: Request):
     account_id, _ = require_account(request)
-    return render(request, "characters.html", account_id=account_id)
+    return render(request, "characters.html", account_id=account_id, required_scopes=SCOPE_NAMES)
 
 
 @app.post("/auth/chars/select")
