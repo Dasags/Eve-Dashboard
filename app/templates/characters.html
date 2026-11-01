@@ -7,8 +7,12 @@
   <div class="grid">
     {% for character in characters %}
     <article class="card" style="display:flex;justify-content:space-between;align-items:center;gap:1rem">
-      <div><strong>{{ character.name }}</strong><div class="hint">{{ "Hauptcharakter" if character.is_main else "Alt-Charakter" }} · {{ "aktiv" if active_character and active_character.id == character.id else "inaktiv" }}</div></div>
+      <div><strong>{{ character.name }}</strong><div class="hint">{{ "Hauptcharakter" if character.is_main else "Alt-Charakter" }} · {{ "aktiv" if active_character and active_character.id == character.id else "inaktiv" }}</div>
+        {% set missing = required_scopes|reject('in', character.scopes)|list %}
+        {% if missing %}<div class="hint" style="color:#ffb4a8">ESI-Rechte fehlen ({{ missing|length }} von {{ required_scopes|length }}): {{ missing|join(', ') }}</div>
+        {% else %}<div class="hint">Alle ESI-Rechte erteilt.</div>{% endif %}</div>
       <div class="toolbar" style="margin:0">
+        {% if required_scopes|reject('in', character.scopes)|list %}<a class="button primary" href="/auth/login?add_alt=true">ESI-Rechte erneuern</a>{% endif %}
         {% if active_character and active_character.id != character.id %}
         <form method="post" action="/auth/chars/select"><input type="hidden" name="character_id" value="{{ character.id }}"><button>Auswählen</button></form>
         {% endif %}
@@ -19,7 +23,8 @@
     </article>
     {% endfor %}
   </div>
-  <div class="form-actions"><a class="button primary" href="/auth/login?add_alt=true">Alt-Charakter hinzufügen (EVE-Login)</a></div>
+  <div class="form-actions"><a class="button primary" href="/auth/login?add_alt=true">Alt-Charakter hinzufügen (EVE-Login)</a>
+  <p class="hint">„ESI-Rechte erneuern“: Im EVE-Login den Charakter wählen, dessen Rechte fehlen, und alle Berechtigungen bestätigen.</p></div>
 </section>
 <section class="panel" style="margin-top:1rem">
   <h2>Konto löschen</h2><p class="hint">Entfernt Hauptcharakter und alle Alts samt gespeicherten Tokens von diesem Server.</p>
