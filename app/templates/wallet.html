@@ -4,6 +4,8 @@
 <div class="eyebrow">Char-Dashboard · Wallet</div><h1>Wallet – {{ active_character.name if active_character else "Charakter" }}</h1>
 {% if needs_scopes %}
 <section class="panel"><h2>Wallet-Berechtigung fehlt</h2><p class="muted">Erlaube den ESI-Scope `esi-wallet.read_character_wallet.v1`, um den persönlichen Kontostand, Journal und Marktgeschäfte zu laden.</p><a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
+{% elif wallet_error %}
+<section class="panel"><h2>Wallet konnte nicht geladen werden</h2><p class="muted">{{ wallet_error }}</p><a class="button primary" href="/auth/chars">Scopes prüfen</a><a class="button" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
 {% else %}
 <div class="grid two">
   <section class="panel"><div class="eyebrow">Kontostand</div><div style="font-size:1.75rem;font-weight:700;margin-top:.4rem">{{ wallet|isk }} ISK</div></section>

@@ -34,7 +34,7 @@
 </section>
 <section class="panel">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
-    <div><h2>Marktpreise</h2><p class="hint">Letzte Abfrage: <span id="last-update">{{ last_updated or "Noch keine Abfrage" }}</span> · automatisch alle 15 Minuten</p><p id="market-status" class="hint" role="status"></p></div>
+    <div><h2>Marktpreise</h2><p class="hint">Letzte Abfrage: {{ last_updated or "Noch keine Abfrage" }} · Aktualisierung nur auf Knopfdruck</p></div>
     <form method="post" action="/marketwatcher/refresh"><input type="hidden" name="watchlist_id" value="{{ watchlist.id }}"><button class="primary" id="refresh-button">Jetzt aktualisieren</button></form>
   </div>
   {% if not watchlist["items"] %}<p class="muted">Füge Items oder ein EFT-Fitting hinzu, um Marktpreise zu verfolgen.</p>
@@ -62,12 +62,4 @@
   </table></div>
   {% endif %}
 </section>
-<script>
-const last={{ (last_updated or "")|tojson }};
-if(!last || Date.now()-Date.parse(last.replace(" ","T")+"Z")>900000){
-  const form=document.querySelector('form[action="/marketwatcher/refresh"]');
-  if(form){const button=form.querySelector("button"),status=document.getElementById("market-status");button.disabled=true;button.textContent="Preise werden aktualisiert …";fetch(form.action,{method:"POST",body:new FormData(form)}).then(response=>{if(!response.ok)throw Error();location.reload();}).catch(()=>{button.disabled=false;button.textContent="Jetzt aktualisieren";status.textContent="Preisabfrage fehlgeschlagen. Prüfe Standortzugriff und ESI-Berechtigungen.";});}
-}
-setInterval(()=>location.reload(),900000);
-</script>
 {% endblock %}
