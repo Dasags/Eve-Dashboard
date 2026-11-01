@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ app_name }}</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; font-family:system-ui,sans-serif; background:#0b0f17; color:#d8e0ee; }
+  header { padding:1rem 1.5rem; background:#111827; border-bottom:1px solid #1f2a3d; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; }
+  h1 { margin:0; font-size:1.4rem; color:#6cb6ff; }
+  .clocks { display:flex; gap:2rem; }
+  .clock small { display:block; color:#7f8ca3; font-size:.75rem; }
+  .clock span { font-size:1.5rem; font-variant-numeric:tabular-nums; }
+  main { padding:1.5rem; max-width:1100px; margin:auto; }
+  h2 { font-size:1.1rem; color:#9db4d6; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:.45rem .6rem; border-bottom:1px solid #1b2538; }
+  th { color:#7f8ca3; font-weight:500; font-size:.8rem; }
+  a { color:#6cb6ff; text-decoration:none; }
+  .muted { color:#7f8ca3; }
+</style>
+</head>
+<body>
+<header>
+  <h1>{{ app_name }}</h1>
+  <div class="clocks">
+    <div class="clock"><small>EVE-Zeit (UTC)</small><span id="utc">--:--:--</span></div>
+    <div class="clock"><small>Deutsche Zeit</small><span id="de">--:--:--</span></div>
+  </div>
+</header>
+<main>
+  <h2>Killfeed</h2>
+  <table>
+    <thead><tr><th>Zeit (UTC)</th><th>System</th><th>Schiff</th><th>Opfer</th><th>Wert</th></tr></thead>
+    <tbody id="kills"><tr><td colspan="5" class="muted">Lade …</td></tr></tbody>
+  </table>
+</main>
+<script>
+const utc = document.getElementById("utc"), de = document.getElementById("de");
+const fmtUtc = new Intl.DateTimeFormat("de-DE", {timeZone:"UTC", hour12:false, timeStyle:"medium"});
+const fmtDe = new Intl.DateTimeFormat("de-DE", {timeZone:"Europe/Berlin", hour12:false, timeStyle:"medium"});
+function tick() { const n = new Date(); utc.textContent = fmtUtc.format(n); de.textContent = fmtDe.format(n); }
+tick(); setInterval(tick, 1000);
+
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+async function loadKills() {
+  const body = document.getElementById("kills");
+  try {
+    const r = await fetch("/api/kills");
+    const kills = await r.json();
+    body.innerHTML = kills.length ? kills.map(k =>
+      `<tr><td>${esc(k.time.slice(11, 19))}</td><td>${esc(k.system)}</td><td>${esc(k.ship)}</td>` +
+      `<td><a href="https://zkillboard.com/kill/${k.id}/" target="_blank" rel="noopener">${esc(k.victim)}</a></td>` +
+      `<td>${Math.round(k.value / 1e6).toLocaleString("de-DE")} Mio ISK</td></tr>`).join("")
+      : '<tr><td colspan="5" class="muted">Keine Kills verfügbar.</td></tr>';
+  } catch (e) {
+    body.innerHTML = '<tr><td colspan="5" class="muted">Killfeed nicht erreichbar.</td></tr>';
+  }
+}
+loadKills(); setInterval(loadKills, 60000);
+</script>
+</body>
+</html>
