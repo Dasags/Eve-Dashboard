@@ -1456,7 +1456,7 @@ async def create_location(
     name: str = Form(...),
     location_id: str = Form(...),
     kind: str = Form(...),
-    character_id: int | None = Form(None),
+    character_id: str = Form(""),
 ):
     require_admin(request)
     if kind not in {"station", "structure"} or not name.strip():
@@ -1483,11 +1483,13 @@ async def create_location(
     if resolved_id < 1:
         raise HTTPException(400, "Stations-/Structure-ID ist ungültig.")
     if kind == "station":
-        character_id = None
-    elif character_id is None or not storage.get_character(character_id):
+        character_id = ""
+    elif not character_id.strip().isdigit() or not storage.get_character(int(character_id)):
         raise HTTPException(400, "Für eine Structure muss ein angemeldeter Charakter gewählt werden.")
     try:
-        storage.add_location(name.strip(), resolved_id, kind, character_id)
+        storage.add_location(
+            name.strip(), resolved_id, kind, int(character_id) if character_id else None
+        )
     except sqlite3.IntegrityError as exc:
         raise HTTPException(409, "Diese Stations-/Structure-ID ist bereits eingetragen.") from exc
     return RedirectResponse("/admin", status_code=303)
