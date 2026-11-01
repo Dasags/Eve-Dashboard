@@ -1,0 +1,32 @@
+services:
+  eve-world:
+    image: ghcr.io/DEIN-GITHUB-NAME/eve-dashboard:latest
+    # build: .   # zum lokalen Bauen einkommentieren
+    container_name: eve-world
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      APP_NAME: "EVE-World"
+      CONTACT: "dein-name@example.com"        # User-Agent für zKillboard/ESI
+      COOKIE_SECURE: "true"                    # false, wenn ohne HTTPS getestet wird
+      PUBLIC_URL: "https://www.adresse.net"    # öffentliche Adresse (nötig für Authentik)
+
+      # --- EVE-Login (EVE SSO) – App unter https://developers.eveonline.com/applications anlegen ---
+      # Callback-URL dort: https://www.adresse.net/auth/callback
+      # Scopes dort: esi-skills.read_skills.v1, esi-skills.read_skillqueue.v1, esi-wallet.read_character_wallet.v1, esi-assets.read_assets.v1,
+      #   esi-markets.structure_markets.v1, esi-universe.read_structures.v1
+      EVE_CLIENT_ID: ""
+      EVE_CLIENT_SECRET: ""
+
+      # --- Admin-Login Variante 1: reines Passwort (/admin) ---
+      ADMIN_PASSWORD: "bitte-aendern"
+
+      # --- Admin-Login Variante 2: Authentik (OAuth2/OIDC), optional, auch zusätzlich zum Passwort ---
+      # Redirect-URI in Authentik: https://www.adresse.net/admin/oidc/callback
+      # OIDC_ISSUER: "https://authentik.example.com/application/o/eve-world/"
+      # OIDC_CLIENT_ID: ""
+      # OIDC_CLIENT_SECRET: ""
+      # OIDC_ADMIN_GROUP: "eve-admins"          # optional: nur diese Authentik-Gruppe darf rein
