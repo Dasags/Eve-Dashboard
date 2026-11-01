@@ -64,6 +64,11 @@ def initialize() -> None:
                 name TEXT PRIMARY KEY,
                 enabled INTEGER NOT NULL DEFAULT 0
             );
+            CREATE TABLE IF NOT EXISTS account_modules (
+                account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                module TEXT NOT NULL,
+                PRIMARY KEY (account_id, module)
+            );
             CREATE TABLE IF NOT EXISTS locations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -187,6 +192,48 @@ def module_enabled(name: str) -> bool:
     with connection() as db:
         row = db.execute("SELECT enabled FROM modules WHERE name = ?", (name,)).fetchone()
     return bool(row and row["enabled"])
+
+
+def account_module_names(account_id: int | None) -> set[str]:
+    if account_id is None:
+        return set()
+    with connection() as db:
+        rows = db.execute(
+            "SELECT module FROM account_modules WHERE account_id = ?", (account_id,)
+        ).fetchall()
+    return {row["module"] for row in rows}
+
+
+def module_allowed(account_id: int | None, name: str) -> bool:
+    return module_enabled(name) or name in account_module_names(account_id)
+
+
+def list_accounts_with_modules() -> list[dict]:
+    with connection() as db:
+        accounts = db.execute(
+            "SELECT a.id, c.name FROM accounts a "
+            "LEFT JOIN characters c ON c.id = a.main_character_id ORDER BY c.name"
+        ).fetchall()
+        grants = db.execute("SELECT account_id, module FROM account_modules").fetchall()
+    granted: dict[int, set[str]] = {}
+    for row in grants:
+        granted.setdefault(row["account_id"], set()).add(row["module"])
+    return [
+        {"id": row["id"], "name": row["name"] or f"Account {row['id']}", "modules": granted.get(row["id"], set())}
+        for row in accounts
+    ]
+
+
+def set_account_modules(account_id: int, modules: set[str]) -> bool:
+    with connection() as db:
+        if not db.execute("SELECT 1 FROM accounts WHERE id = ?", (account_id,)).fetchone():
+            return False
+        db.execute("DELETE FROM account_modules WHERE account_id = ?", (account_id,))
+        db.executemany(
+            "INSERT INTO account_modules(account_id, module) VALUES (?, ?)",
+            [(account_id, name) for name in sorted(modules)],
+        )
+    return True
 
 
 def set_module(name: str, enabled: bool) -> None:
