@@ -43,9 +43,7 @@ Listen mit Items (Suche oder EFT-Fitting importieren), regelmäßige Preisabfrag
 PI-Produkt (P1–P4) suchen, Menge eingeben → komplette Produktionskette bis zu den Rohstoffen (P0) mit Bedarf, Zyklen, Dauer je Schritt und Preisen **in jedem Schritt** in Jita und in den vom Admin festgelegten Heimat-Standorten (je Standort per Häkchen wählbar). Mit „Einkaufsstufe" oder dem Knopf je Zeile legst du fest, was du kaufst statt selbst herzustellen. Schemata kommen einmalig aus der SDE (Fuzzwork), Preise 10 Minuten gecacht.
 
 ## Startseite
-EVE-Zeit (UTC) + deutsche Zeit, zoom-/verschiebbare Karte von New Eden, Killfeed.
-Kartenhöhe/-breite und Killfeed-Regionen stellst du im Admin-Panel ein.
-Kartendaten (Fuzzwork-SDE) und Kills (zKillboard + ESI) werden vom Server geholt – er braucht Internetzugang.
+Die Startseite ist derzeit eine reine Informationsseite und zeigt den Projektstatus sowie geplante Dashboard-Bereiche. Sie fragt keine Live-Spieldaten ab. Die Dashboard-Funktionen werden schrittweise ergänzt.
 
 ## Struktur
 - `app/main.py` – App-Factory

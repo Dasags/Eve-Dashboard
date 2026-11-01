@@ -3,62 +3,84 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ app_name }}</title>
+<meta name="theme-color" content="#0b1019">
+<title>{{ app_name }} – EVE Online Dashboard</title>
 <style>
-  :root { color-scheme: dark; }
-  body { margin:0; font-family:system-ui,sans-serif; background:#0b0f17; color:#d8e0ee; }
-  header { padding:1rem 1.5rem; background:#111827; border-bottom:1px solid #1f2a3d; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; }
-  h1 { margin:0; font-size:1.4rem; color:#6cb6ff; }
-  .clocks { display:flex; gap:2rem; }
-  .clock small { display:block; color:#7f8ca3; font-size:.75rem; }
-  .clock span { font-size:1.5rem; font-variant-numeric:tabular-nums; }
-  main { padding:1.5rem; max-width:1100px; margin:auto; }
-  h2 { font-size:1.1rem; color:#9db4d6; }
-  table { width:100%; border-collapse:collapse; }
-  th, td { text-align:left; padding:.45rem .6rem; border-bottom:1px solid #1b2538; }
-  th { color:#7f8ca3; font-weight:500; font-size:.8rem; }
-  a { color:#6cb6ff; text-decoration:none; }
-  .muted { color:#7f8ca3; }
+  :root {
+    color-scheme: dark;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0b1019;
+    color: #e7edf7;
+  }
+  * { box-sizing: border-box; }
+  body { min-width: 320px; margin: 0; background: radial-gradient(ellipse at 50% 0, #172438 0, #0b1019 52rem); }
+  header, main, footer { width: min(100% - 2rem, 1040px); margin-inline: auto; }
+  header { display: flex; align-items: center; gap: .75rem; padding-block: 1.5rem; }
+  .mark { display: grid; width: 2.5rem; aspect-ratio: 1; place-items: center; border: 1px solid #31527a; border-radius: .75rem; color: #8bc4ff; font-weight: 800; }
+  .brand { font-weight: 700; letter-spacing: .02em; }
+  main { padding-block: 5rem 4rem; }
+  .intro { max-width: 720px; margin-bottom: 3.5rem; }
+  .status { display: inline-flex; align-items: center; gap: .5rem; padding: .4rem .7rem; border: 1px solid #31445d; border-radius: 999px; background: #111b29; color: #b8c8dd; font-size: .85rem; }
+  .dot { width: .5rem; aspect-ratio: 1; border-radius: 50%; background: #e8ad55; }
+  h1 { margin: 1.25rem 0 1rem; font-size: clamp(2.4rem, 7vw, 4.5rem); line-height: 1.05; letter-spacing: -.045em; }
+  h1 span { color: #8bc4ff; }
+  .lead { max-width: 620px; color: #aab8ca; font-size: 1.1rem; line-height: 1.75; }
+  h2 { margin: 0 0 1rem; font-size: 1.2rem; }
+  .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+  .card { min-height: 190px; padding: 1.25rem; border: 1px solid #253348; border-radius: 1rem; background: rgb(17 26 39 / 85%); }
+  .card h3 { margin: .25rem 0 .65rem; font-size: 1rem; }
+  .card p { margin: 0; color: #9eacc0; font-size: .93rem; line-height: 1.65; }
+  .tag { display: inline-block; margin-bottom: .85rem; color: #8bc4ff; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .note { margin-top: 2rem; padding: 1rem 1.1rem; border-left: 2px solid #527da8; background: #101925; color: #aab8ca; line-height: 1.65; }
+  footer { padding-block: 1.25rem 2rem; border-top: 1px solid #1f2b3d; color: #718198; font-size: .85rem; }
+  @media (max-width: 700px) {
+    main { padding-top: 3rem; }
+    .features { grid-template-columns: 1fr; }
+    .card { min-height: auto; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>{{ app_name }}</h1>
-  <div class="clocks">
-    <div class="clock"><small>EVE-Zeit (UTC)</small><span id="utc">--:--:--</span></div>
-    <div class="clock"><small>Deutsche Zeit</small><span id="de">--:--:--</span></div>
-  </div>
+  <div class="mark" aria-hidden="true">E</div>
+  <div class="brand">{{ app_name }}</div>
 </header>
 <main>
-  <h2>Killfeed</h2>
-  <table>
-    <thead><tr><th>Zeit (UTC)</th><th>System</th><th>Schiff</th><th>Opfer</th><th>Wert</th></tr></thead>
-    <tbody id="kills"><tr><td colspan="5" class="muted">Lade …</td></tr></tbody>
-  </table>
-</main>
-<script>
-const utc = document.getElementById("utc"), de = document.getElementById("de");
-const fmtUtc = new Intl.DateTimeFormat("de-DE", {timeZone:"UTC", hour12:false, timeStyle:"medium"});
-const fmtDe = new Intl.DateTimeFormat("de-DE", {timeZone:"Europe/Berlin", hour12:false, timeStyle:"medium"});
-function tick() { const n = new Date(); utc.textContent = fmtUtc.format(n); de.textContent = fmtDe.format(n); }
-tick(); setInterval(tick, 1000);
+  <section class="intro" aria-labelledby="page-title">
+    <div class="status"><span class="dot" aria-hidden="true"></span> Im Aufbau</div>
+    <h1 id="page-title">New Eden im <span>Überblick.</span></h1>
+    <p class="lead">
+      {{ app_name }} ist das Grundgerüst für ein persönliches EVE-Online-Dashboard.
+      Hier sollen wichtige Informationen und Werkzeuge für deine Charaktere an einem Ort zusammenkommen.
+    </p>
+  </section>
 
-function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
-async function loadKills() {
-  const body = document.getElementById("kills");
-  try {
-    const r = await fetch("/api/kills");
-    const kills = await r.json();
-    body.innerHTML = kills.length ? kills.map(k =>
-      `<tr><td>${esc(k.time.slice(11, 19))}</td><td>${esc(k.system)}</td><td>${esc(k.ship)}</td>` +
-      `<td><a href="https://zkillboard.com/kill/${k.id}/" target="_blank" rel="noopener">${esc(k.victim)}</a></td>` +
-      `<td>${Math.round(k.value / 1e6).toLocaleString("de-DE")} Mio ISK</td></tr>`).join("")
-      : '<tr><td colspan="5" class="muted">Keine Kills verfügbar.</td></tr>';
-  } catch (e) {
-    body.innerHTML = '<tr><td colspan="5" class="muted">Killfeed nicht erreichbar.</td></tr>';
-  }
-}
-loadKills(); setInterval(loadKills, 60000);
-</script>
+  <section aria-labelledby="features-title">
+    <h2 id="features-title">Was hier entstehen soll</h2>
+    <div class="features">
+      <article class="card">
+        <span class="tag">Geplant</span>
+        <h3>Charakter-Übersicht</h3>
+        <p>Charaktere, Skills und weitere persönliche Informationen übersichtlich bündeln.</p>
+      </article>
+      <article class="card">
+        <span class="tag">Geplant</span>
+        <h3>Markt &amp; Planung</h3>
+        <p>Preise, Waren und Produktionsplanung für deine Aktivitäten in New Eden im Blick behalten.</p>
+      </article>
+      <article class="card">
+        <span class="tag">Geplant</span>
+        <h3>Universum &amp; Ereignisse</h3>
+        <p>Eine zentrale Anlaufstelle für interessante Entwicklungen und Informationen aus dem Spiel.</p>
+      </article>
+    </div>
+  </section>
+
+  <p class="note">
+    Dies ist zunächst eine Informationsseite. Die genannten Dashboard-Funktionen sind geplant und
+    werden nach und nach ergänzt; aktuell werden hier noch keine Live-Spieldaten angezeigt.
+  </p>
+</main>
+<footer>{{ app_name }} · Ein Dashboard-Projekt für EVE Online</footer>
 </body>
 </html>
