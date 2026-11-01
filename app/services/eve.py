@@ -53,6 +53,15 @@ def authorization_url(state: str, scopes: list[str] | None = None) -> str:
     return f"{SSO}/v2/oauth/authorize?{query}"
 
 
+def token_scopes(token: dict, identity: dict) -> list[str]:
+    scopes = token.get("scope") or identity.get("Scopes") or identity.get("scopes") or []
+    if isinstance(scopes, str):
+        return scopes.split()
+    if isinstance(scopes, list):
+        return [scope for scope in scopes if isinstance(scope, str)]
+    return []
+
+
 async def exchange_code(code: str) -> tuple[dict, dict]:
     client_id, client_secret = oauth_credentials()
     async with httpx.AsyncClient(timeout=20) as client:
@@ -74,8 +83,7 @@ async def exchange_code(code: str) -> tuple[dict, dict]:
         identity_response.raise_for_status()
         identity = identity_response.json()
     token["expires_at"] = int(time.time()) + int(token.get("expires_in", 0))
-    scope = token.get("scope") or ""
-    token["scope"] = scope.split() if isinstance(scope, str) else scope
+    token["scope"] = token_scopes(token, identity)
     return identity, token
 
 
