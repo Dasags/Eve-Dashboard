@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1019">
+<title>{{ character.name }} – {{ app_name }}</title>
+<style>
+  :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0b1019; color: #e7edf7; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  header, main { width: min(100% - 2rem, 900px); margin-inline: auto; }
+  header { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding-block:1.5rem; border-bottom:1px solid #243247; }
+  a { color:#8bc4ff; text-decoration:none; }
+  button { padding:.55rem .8rem; border:1px solid #34465d; border-radius:.5rem; background:#121c2a; color:#dcecff; cursor:pointer; }
+  main { padding-block:3rem; }
+  .eyebrow { color:#8bc4ff; font-size:.8rem; letter-spacing:.08em; text-transform:uppercase; }
+  h1 { margin:.5rem 0 2rem; font-size:clamp(2rem, 6vw, 3.5rem); }
+  .card { padding:1.5rem; border:1px solid #253348; border-radius:1rem; background:#111a27; }
+  dl { display:grid; grid-template-columns: minmax(8rem, .5fr) 1fr; gap:.9rem 1.5rem; margin:0; }
+  dt { color:#8494aa; }
+  dd { margin:0; }
+  .placeholder { margin-top:2rem; color:#9eacc0; line-height:1.7; }
+  @media(max-width:500px) { dl { grid-template-columns:1fr; gap:.35rem; } dd { margin-bottom:.8rem; } }
+</style>
+</head>
+<body>
+<header>
+  <a href="/">{{ app_name }}</a>
+  <form method="post" action="/auth/logout"><button type="submit">Abmelden</button></form>
+</header>
+<main>
+  <div class="eyebrow">Charakter-Übersicht</div>
+  <h1>{{ character.name }}</h1>
+  <section class="card" aria-label="Charakterinformationen">
+    <dl>
+      <dt>Corporation</dt><dd>{{ corporation.name if corporation else "Nicht verfügbar" }}</dd>
+      <dt>Allianz</dt><dd>{{ alliance.name if alliance else "Keine Allianz" }}</dd>
+      <dt>Sicherheitsstatus</dt><dd>{{ "%.1f"|format(character.security_status) if character.security_status is defined else "Nicht verfügbar" }}</dd>
+      <dt>Charakter-ID</dt><dd>{{ character_id }}</dd>
+    </dl>
+  </section>
+  <p class="placeholder">Dies ist der erste funktionale Baustein. Skills, Skillqueue und weitere Module können anschließend schrittweise ergänzt werden.</p>
+</main>
+</body>
+</html>

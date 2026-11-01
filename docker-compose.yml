@@ -20,6 +20,7 @@ services:
       #   esi-markets.structure_markets.v1, esi-universe.read_structures.v1
       EVE_CLIENT_ID: ""
       EVE_CLIENT_SECRET: ""
+      SESSION_SECRET: "bitte-durch-einen-langen-zufaelligen-wert-ersetzen"
 
       # --- Admin-Login Variante 1: reines Passwort (/admin) ---
       ADMIN_PASSWORD: "bitte-aendern"

@@ -32,6 +32,8 @@
   .card p { margin: 0; color: #9eacc0; font-size: .93rem; line-height: 1.65; }
   .tag { display: inline-block; margin-bottom: .85rem; color: #8bc4ff; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
   .note { margin-top: 2rem; padding: 1rem 1.1rem; border-left: 2px solid #527da8; background: #101925; color: #aab8ca; line-height: 1.65; }
+  .action { display: inline-flex; margin-top: 1rem; padding: .7rem 1rem; border: 1px solid #4774a2; border-radius: .65rem; background: #16263a; color: #dcecff; font-weight: 650; text-decoration: none; }
+  .action:hover { background: #1c3450; }
   footer { padding-block: 1.25rem 2rem; border-top: 1px solid #1f2b3d; color: #718198; font-size: .85rem; }
   @media (max-width: 700px) {
     main { padding-top: 3rem; }
@@ -53,6 +55,11 @@
       {{ app_name }} ist das Grundgerüst für ein persönliches EVE-Online-Dashboard.
       Hier sollen wichtige Informationen und Werkzeuge für deine Charaktere an einem Ort zusammenkommen.
     </p>
+    {% if character_name %}
+    <a class="action" href="/dashboard">Angemeldet als {{ character_name }} · Dashboard öffnen</a>
+    {% else %}
+    <a class="action" href="/auth/login">Mit EVE anmelden</a>
+    {% endif %}
   </section>
 
   <section aria-labelledby="features-title">
