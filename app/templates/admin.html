@@ -17,7 +17,7 @@
   </form>
 </section>
 <section class="panel" style="margin-bottom:1rem">
-  <h2>Module</h2><p class="hint">Char-Dashboard ist standardmäßig aktiv. Nicht aktivierte Module werden im Dashboard nicht verlinkt.</p>
+  <h2>Module</h2><p class="hint">Char-Dashboard ist standardmäßig aktiv. Hier aktivierte Module gelten für alle Spieler. Nicht aktivierte Module können unten einzelnen Spielern freigegeben werden.</p>
   <form method="post" action="/admin/modules">
     <div class="grid two">
     {% for module in modules %}
@@ -29,6 +29,20 @@
     </div>
     <div class="form-actions"><button class="primary">Module speichern</button></div>
   </form>
+</section>
+<section class="panel" style="margin-bottom:1rem">
+  <h2>Spieler-Freigaben</h2><p class="hint">Gibt einzelnen Spielern (Account, benannt nach dem Main-Charakter) zusätzliche Module frei, auch wenn sie oben nicht für alle aktiv sind.</p>
+  {% for account in account_access %}
+  <form method="post" action="/admin/accounts/{{ account.id }}/modules" style="margin-bottom:.8rem">
+    <strong>{{ account.name }}</strong>
+    <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:center">
+      {% for module in modules %}{% if module.name != 'dashboard' %}
+      <label style="display:flex;gap:.4rem;align-items:center"><input type="checkbox" name="modules" value="{{ module.name }}" {% if module.name in account.modules %}checked{% endif %}>{{ module_details[module.name][0] }}</label>
+      {% endif %}{% endfor %}
+      <button>Speichern</button>
+    </div>
+  </form>
+  {% else %}<p class="muted">Noch hat sich kein Spieler angemeldet.</p>{% endfor %}
 </section>
 <section class="panel">
   <h2>Marketwatcher – Standorte</h2><p class="hint">Jita 4-4 ist fest eingebaut. Weitere NPC-Stationen oder Structures können hier eingetragen werden.</p>

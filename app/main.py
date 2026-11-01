@@ -128,9 +128,9 @@ def require_admin(request: Request) -> None:
         raise HTTPException(401, "Bitte als Administrator anmelden.")
 
 
-def require_module(name: str) -> None:
-    if not storage.module_enabled(name):
-        raise HTTPException(404, "Dieses Modul ist derzeit deaktiviert.")
+def require_module(request: Request, name: str) -> None:
+    if not storage.module_allowed(current_account(request), name):
+        raise HTTPException(404, "Dieses Modul ist für dich nicht freigeschaltet.")
 
 
 def render(request: Request, page: str, **context):
@@ -140,12 +140,16 @@ def render(request: Request, page: str, **context):
     selected_character = next(
         (character for character in characters if character["id"] == character_id), None
     )
+    granted_modules = storage.account_module_names(account_id)
     return templates.TemplateResponse(
         request,
         page,
         {
             "app_name": APP_NAME,
-            "modules": storage.list_modules(),
+            "modules": [
+                {**item, "enabled": item["enabled"] or item["name"] in granted_modules}
+                for item in storage.list_modules()
+            ],
             "active_character": selected_character,
             "characters": characters,
             **context,
@@ -281,7 +285,7 @@ def logout(request: Request):
 @app.get("/dashboard")
 async def dashboard(request: Request):
     account_id, character_id = require_account(request)
-    require_module("dashboard")
+    require_module(request, "dashboard")
     async def profile(info: dict) -> dict:
         char_id = info["id"]
         async with ESIClient() as esi:
@@ -363,7 +367,7 @@ async def dashboard(request: Request):
 @app.get("/skills")
 async def skills_page(request: Request):
     _, character_id = require_account(request)
-    require_module("skills")
+    require_module(request, "skills")
     character_token = storage.get_character(character_id)
     required = {"esi-skills.read_skills.v1", "esi-skills.read_skillqueue.v1"}
     if not required.issubset(set(character_token["scopes"])):
@@ -439,7 +443,7 @@ async def skills_page(request: Request):
 @app.get("/wallet")
 async def wallet_page(request: Request, view: str = "journal"):
     account_id, character_id = require_account(request)
-    require_module("wallet")
+    require_module(request, "wallet")
     scopes = storage.get_character(character_id)["scopes"]
     if "esi-wallet.read_character_wallet.v1" not in scopes:
         return render(
@@ -508,7 +512,7 @@ async def wallet_page(request: Request, view: str = "journal"):
 @app.get("/wallet/distribution")
 async def wallet_distribution(request: Request):
     account_id, character_id = require_account(request)
-    require_module("wallet")
+    require_module(request, "wallet")
     if "esi-wallet.read_character_wallet.v1" not in storage.get_character(character_id)["scopes"]:
         return render(
             request,
@@ -566,7 +570,7 @@ async def wallet_distribution(request: Request):
 @app.post("/wallet/plan/start")
 async def save_wallet_plan_start(request: Request):
     account_id, character_id = require_account(request)
-    require_module("wallet")
+    require_module(request, "wallet")
     if "esi-wallet.read_character_wallet.v1" not in storage.get_character(character_id)["scopes"]:
         raise HTTPException(403, "Wallet-ESI-Scope fehlt.")
     try:
@@ -585,7 +589,7 @@ def create_wallet_label(
     percentage: float = Form(...),
 ):
     account_id, character_id = require_account(request)
-    require_module("wallet")
+    require_module(request, "wallet")
     if (
         not name.strip()
         or len(name) > 80
@@ -607,7 +611,7 @@ def create_wallet_label(
 @app.post("/wallet/plan/labels/{label_id}/delete")
 def delete_wallet_label(request: Request, label_id: int):
     account_id, character_id = require_account(request)
-    require_module("wallet")
+    require_module(request, "wallet")
     if not storage.remove_wallet_label(account_id, character_id, label_id):
         raise HTTPException(404, "Beschriftung nicht gefunden.")
     return RedirectResponse("/wallet/distribution", status_code=303)
@@ -623,7 +627,7 @@ def create_wallet_entry(
     label_id: int | None = Form(None),
 ):
     account_id, character_id = require_account(request)
-    require_module("wallet")
+    require_module(request, "wallet")
     if kind not in {"income", "expense"} or not description.strip() or len(description) > 120:
         raise HTTPException(400, "Eintragstyp oder Beschreibung ist ungültig.")
     if not math.isfinite(amount) or amount <= 0 or amount > 1e15:
@@ -647,7 +651,7 @@ def create_wallet_entry(
 @app.post("/wallet/plan/entries/{entry_id}/delete")
 def delete_wallet_entry(request: Request, entry_id: int):
     account_id, character_id = require_account(request)
-    require_module("wallet")
+    require_module(request, "wallet")
     if not storage.remove_wallet_entry(account_id, character_id, entry_id):
         raise HTTPException(404, "Wallet-Eintrag nicht gefunden.")
     return RedirectResponse("/wallet/distribution", status_code=303)
@@ -695,7 +699,7 @@ async def refresh_marketwatcher(watchlist: dict, locations: list[dict]) -> None:
 @app.get("/marketwatcher")
 async def marketwatcher_page(request: Request, watchlist_id: int | None = None):
     account_id, _ = require_account(request)
-    require_module("marketwatcher")
+    require_module(request, "marketwatcher")
     lists, watchlist, locations = marketwatcher_context(account_id, watchlist_id)
     prices = storage.watchlist_prices(watchlist["id"])
     by_item: dict[int, dict[int, dict]] = {}
@@ -716,7 +720,7 @@ async def marketwatcher_page(request: Request, watchlist_id: int | None = None):
 @app.post("/marketwatcher/lists")
 def create_marketwatcher_list(request: Request, name: str = Form(...)):
     account_id, _ = require_account(request)
-    require_module("marketwatcher")
+    require_module(request, "marketwatcher")
     name = name.strip()
     if not name or len(name) > 60:
         raise HTTPException(400, "Listenname muss zwischen 1 und 60 Zeichen lang sein.")
@@ -730,7 +734,7 @@ def create_marketwatcher_list(request: Request, name: str = Form(...)):
 @app.post("/marketwatcher/lists/{watchlist_id}/delete")
 def remove_marketwatcher_list(request: Request, watchlist_id: int):
     account_id, _ = require_account(request)
-    require_module("marketwatcher")
+    require_module(request, "marketwatcher")
     if not storage.delete_watchlist(account_id, watchlist_id):
         raise HTTPException(404, "Liste nicht gefunden.")
     return RedirectResponse("/marketwatcher", status_code=303)
@@ -743,7 +747,7 @@ def select_marketwatcher_locations(
     location_ids: list[int] = Form([]),
 ):
     account_id, _ = require_account(request)
-    require_module("marketwatcher")
+    require_module(request, "marketwatcher")
     if not storage.get_watchlist(account_id, watchlist_id):
         raise HTTPException(404, "Liste nicht gefunden.")
     try:
@@ -761,7 +765,7 @@ async def add_marketwatcher_item(
     quantity: int = Form(1),
 ):
     account_id, _ = require_account(request)
-    require_module("marketwatcher")
+    require_module(request, "marketwatcher")
     if not storage.get_watchlist(account_id, watchlist_id):
         raise HTTPException(404, "Liste nicht gefunden.")
     if not name.strip() or len(name) > 120 or not 1 <= quantity <= 1_000_000:
@@ -784,7 +788,7 @@ async def import_marketwatcher_fitting(
     fitting: str = Form(...),
 ):
     account_id, _ = require_account(request)
-    require_module("marketwatcher")
+    require_module(request, "marketwatcher")
     if not storage.get_watchlist(account_id, watchlist_id):
         raise HTTPException(404, "Liste nicht gefunden.")
     if len(fitting) > 100_000:
@@ -826,7 +830,7 @@ async def import_marketwatcher_fitting(
 @app.post("/marketwatcher/items/{item_id}/delete")
 def delete_marketwatcher_item(request: Request, item_id: int, watchlist_id: int = Form(...)):
     account_id, _ = require_account(request)
-    require_module("marketwatcher")
+    require_module(request, "marketwatcher")
     if not storage.get_watchlist(account_id, watchlist_id):
         raise HTTPException(404, "Liste nicht gefunden.")
     if not storage.remove_watchlist_item(watchlist_id, item_id):
@@ -840,7 +844,7 @@ async def refresh_marketwatcher_route(
     watchlist_id: int = Form(...),
 ):
     account_id, _ = require_account(request)
-    require_module("marketwatcher")
+    require_module(request, "marketwatcher")
     _, watchlist, locations = marketwatcher_context(account_id, watchlist_id)
     try:
         await refresh_marketwatcher(watchlist, locations)
@@ -908,7 +912,7 @@ async def character_skill_levels(character_id: int) -> dict[int, int] | None:
 @app.get("/industry")
 def industry_page(request: Request):
     require_account(request)
-    require_module("industry")
+    require_module(request, "industry")
     return render(
         request,
         "industry.html",
@@ -946,7 +950,7 @@ async def calculate_industry(
     decryptor: str = Form(""),
 ):
     account_id, character_id = require_account(request)
-    require_module("industry")
+    require_module(request, "industry")
     form_data = {
         "product_name": product_name,
         "runs": runs,
@@ -1167,7 +1171,7 @@ async def calculate_industry(
 @app.get("/planetary-industry")
 def planetary_industry_page(request: Request):
     require_account(request)
-    require_module("planetary-industry")
+    require_module(request, "planetary-industry")
     locations = storage.list_locations()
     return render(
         request,
@@ -1192,7 +1196,7 @@ async def calculate_planetary_industry(
     location_ids: list[int] = Form([]),
 ):
     require_account(request)
-    require_module("planetary-industry")
+    require_module(request, "planetary-industry")
     form_data = {
         "product_name": product_name,
         "quantity": quantity,
@@ -1408,6 +1412,8 @@ def admin(request: Request):
         settings=settings,
         module_details=MODULE_DETAILS,
         locations=storage.list_locations(),
+        modules=storage.list_modules(),
+        account_access=storage.list_accounts_with_modules(),
         error=request.query_params.get("error"),
     )
 
@@ -1447,6 +1453,18 @@ def update_modules(request: Request, enabled: list[str] = Form([])):
         raise HTTPException(400, "Unbekanntes Modul.")
     for name in MODULE_DETAILS:
         storage.set_module(name, name in enabled)
+    return RedirectResponse("/admin", status_code=303)
+
+
+@app.post("/admin/accounts/{account_id}/modules")
+def update_account_modules(
+    request: Request, account_id: int, modules: list[str] = Form([])
+):
+    require_admin(request)
+    if set(modules) - set(MODULE_DETAILS):
+        raise HTTPException(400, "Unbekanntes Modul.")
+    if not storage.set_account_modules(account_id, set(modules)):
+        raise HTTPException(404, "Account nicht gefunden.")
     return RedirectResponse("/admin", status_code=303)
 
 
@@ -1535,7 +1553,7 @@ async def map_api():
 
 @app.get("/incursions")
 async def incursions_page(request: Request):
-    require_module("incursions")
+    require_module(request, "incursions")
     try:
         data = await get_incursions()
     except httpx.HTTPError as exc:
@@ -1545,7 +1563,7 @@ async def incursions_page(request: Request):
 
 @app.get("/api/incursions")
 async def incursions_api():
-    require_module("incursions")
+    require_module(request, "incursions")
     try:
         return await get_incursions()
     except httpx.HTTPError as exc:

@@ -42,5 +42,19 @@ class StorageTests(unittest.TestCase):
         self.assertTrue(storage.delete_account(account_id))
 
 
+class AccountModuleTests(unittest.TestCase):
+    def test_module_grants_are_per_account(self):
+        token = {"access_token": "a", "refresh_token": "r", "scope": [], "expires_at": 1}
+        first = storage.save_character(111, "First", token)
+        second = storage.save_character(222, "Second", token)
+        self.assertFalse(storage.module_allowed(first, "wallet"))
+        self.assertTrue(storage.set_account_modules(first, {"wallet"}))
+        self.assertTrue(storage.module_allowed(first, "wallet"))
+        self.assertFalse(storage.module_allowed(second, "wallet"))
+        self.assertFalse(storage.set_account_modules(999999, {"wallet"}))
+        storage.set_account_modules(first, set())
+        self.assertFalse(storage.module_allowed(first, "wallet"))
+
+
 if __name__ == "__main__":
     unittest.main()
