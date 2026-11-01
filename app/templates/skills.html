@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Skills – {{ app_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Char-Dashboard · Skills</div><h1>Skills – {{ active_character.name if active_character else "Charakter" }}</h1>
+{% if needs_scopes %}
+  <section class="panel"><h2>ESI-Berechtigungen fehlen</h2><p class="muted">Für Skillübersicht und Warteschlange müssen die Scopes `esi-skills.read_skills.v1` und `esi-skills.read_skillqueue.v1` freigegeben sein.</p><a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
+{% else %}
+<section class="panel" style="margin-bottom:1rem">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem"><h2>Skill-Warteschlange</h2>
+    {% if queue %}<span class="pill good">Fertig: <span id="queue-finish" data-finish="{{ queue[-1].finish_date or '' }}">{{ queue[-1].finish_date[:16]|replace("T"," ") if queue[-1].finish_date else "—" }} UTC</span></span>{% else %}<span class="pill">Queue pausiert</span>{% endif %}
+  </div>
+  {% if queue %}
+  <div class="table-wrap"><table><thead><tr><th>#</th><th>Skill</th><th>Level</th><th>Abschluss (UTC)</th><th>Restzeit</th></tr></thead><tbody>
+    {% for entry in queue %}<tr><td>{{ entry.queue_position + 1 }}</td><td>{{ entry.skill_name }}</td><td>{{ ["0","I","II","III","IV","V"][entry.finished_level] if entry.finished_level in range(0,6) else entry.finished_level }}</td><td>{{ entry.finish_date[:16]|replace("T"," ") if entry.finish_date else "—" }}</td><td class="remaining" data-finish="{{ entry.finish_date or '' }}">—</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<p class="muted">Deine Skill-Warteschlange ist leer.</p>{% endif %}
+</section>
+<section class="panel">
+  <div style="display:flex;justify-content:space-between;gap:1rem;align-items:end;flex-wrap:wrap">
+    <div><h2>Gesamtübersicht</h2><p class="hint">Skillpunkte {{ "{:,}".format(total_sp).replace(",", ".") }} · Geskillte Skills {{ skills.skills|length }}</p></div>
+    <label style="min-width:min(100%,260px)">Skill suchen<input id="skill-search" type="search" placeholder="Skillname …"></label>
+  </div>
+  <div class="toolbar" style="margin-top:1rem"><button type="button" id="expand-all">Alle aufklappen</button><button type="button" id="collapse-all">Alle zuklappen</button></div>
+  {% for group in skill_groups %}
+    {% set trained_count = group.skills|selectattr("level","gt",0)|list|length %}
+    <details class="skill-group" open>
+      <summary style="cursor:pointer;padding:.75rem 0;border-bottom:1px solid #253348"><strong>{{ group.name }}</strong><span class="hint"> · {{ trained_count }} / {{ group.skills|length }} geskillt</span></summary>
+      <div class="table-wrap"><table><tbody>
+      {% for skill in group.skills %}
+        <tr class="skill-row" data-search="{{ (skill.name ~ ' ' ~ group.name)|lower }}">
+          <td>{{ skill.name }}</td>
+          <td>{% for level in range(1,6) %}<span aria-label="Level {{ level }}" style="display:inline-block;width:.65rem;height:.65rem;margin-right:.16rem;border-radius:.15rem;background:{{ '#55d69a' if skill.level >= level else '#29384d' }}"></span>{% endfor %}</td>
+          <td>{% if skill.level == 5 %}Level V · max{% elif skill.level > 0 %}Level {{ ["","I","II","III","IV","V"][skill.level] }}{% else %}Nicht geskillt{% endif %}</td>
+          <td class="hint">{{ "{:,}".format(skill.points).replace(",", ".") }} SP</td>
+        </tr>
+      {% endfor %}
+      </tbody></table></div>
+    </details>
+  {% else %}<p class="muted">Keine Skilldaten vorhanden.</p>{% endfor %}
+</section>
+<script>
+document.getElementById("expand-all").onclick=()=>document.querySelectorAll(".skill-group").forEach(group=>group.open=true);
+document.getElementById("collapse-all").onclick=()=>document.querySelectorAll(".skill-group").forEach(group=>group.open=false);
+document.getElementById("skill-search").addEventListener("input",event=>{
+ const query=event.target.value.trim().toLowerCase();
+ document.querySelectorAll(".skill-row").forEach(row=>row.hidden=!row.dataset.search.includes(query));
+ document.querySelectorAll(".skill-group").forEach(group=>{
+  const visible=[...group.querySelectorAll(".skill-row")].some(row=>!row.hidden);
+  group.hidden=!visible;
+  if(query&&visible)group.open=true;
+ });
+});
+function formatRemaining(seconds){if(seconds<=0)return "Fertig";const d=Math.floor(seconds/86400);seconds%=86400;const h=Math.floor(seconds/3600);seconds%=3600;const m=Math.floor(seconds/60);return `${d?d+"d ":""}${h}h ${m}m`;}
+function updateRemaining(){document.querySelectorAll(".remaining").forEach(node=>{const end=Date.parse(node.dataset.finish);if(Number.isFinite(end))node.textContent=formatRemaining(Math.floor((end-Date.now())/1000));});}
+updateRemaining();setInterval(updateRemaining,60000);
+</script>
+{% endif %}
+{% endblock %}

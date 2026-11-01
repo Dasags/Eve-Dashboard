@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Admin-Panel – {{ app_name }}{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center"><div><div class="eyebrow">Konfiguration</div><h1>Admin-Panel</h1></div><form method="post" action="/admin/logout"><button>Abmelden</button></form></div>
+{% if error %}<p class="notice error" role="alert">{{ error }}</p>{% endif %}
+<section class="panel" style="margin-bottom:1rem">
+  <h2>MOTD (Nachricht des Tages)</h2><p class="hint">Erscheint oben im Char-Dashboard. Maximal 1000 Zeichen; leer = keine MOTD.</p>
+  <form method="post" action="/admin/settings">
+    <label>MOTD<textarea name="motd" maxlength="1000">{{ settings.motd }}</textarea></label>
+    <div class="form-grid" style="margin-top:1rem">
+      <label>Kartenhöhe (px, 250–1200)<input type="number" name="map_height" min="250" max="1200" value="{{ settings.map_height }}" required></label>
+      <label>Kartenbreite der Zeile (%)<input type="number" name="map_width" min="40" max="100" value="{{ settings.map_width }}" required></label>
+      <label>Killfeed-Regionen (Namen, Komma-getrennt)<input name="killfeed_regions" value="{{ settings.killfeed_regions }}"></label>
+      <label>Anzahl Killfeed-Einträge (5–50)<input type="number" name="killfeed_count" min="5" max="50" value="{{ settings.killfeed_count }}" required></label>
+    </div>
+    <div class="form-actions"><button class="primary">Einstellungen speichern</button></div>
+  </form>
+</section>
+<section class="panel" style="margin-bottom:1rem">
+  <h2>Module</h2><p class="hint">Char-Dashboard ist standardmäßig aktiv. Nicht aktivierte Module werden im Dashboard nicht verlinkt.</p>
+  <form method="post" action="/admin/modules">
+    <div class="grid two">
+    {% for module in modules %}
+      <label style="grid-template-columns:auto 1fr;align-items:start;gap:.8rem">
+        <input type="checkbox" name="enabled" value="{{ module.name }}" {% if module.enabled %}checked{% endif %}>
+        <span><strong>{{ module_details[module.name][0] }}</strong><br><span class="hint">{{ module_details[module.name][1] }}</span></span>
+      </label>
+    {% endfor %}
+    </div>
+    <div class="form-actions"><button class="primary">Module speichern</button></div>
+  </form>
+</section>
+<section class="panel">
+  <h2>Marketwatcher – Standorte</h2><p class="hint">Jita 4-4 ist fest eingebaut. Weitere NPC-Stationen oder Structures können hier eingetragen werden.</p>
+  {% if locations %}
+  <div class="table-wrap"><table><thead><tr><th>Name</th><th>Typ</th><th>ID</th><th>Charakter</th><th></th></tr></thead><tbody>
+    {% for location in locations %}<tr><td>{{ location.name }}</td><td>{{ "NPC-Station" if location.kind == "station" else "Structure" }}</td><td>{{ location.location_id }}</td><td>{{ location.character_name or "—" }}</td><td>{% if not location.is_default %}<form method="post" action="/admin/locations/{{ location.id }}/delete"><button class="danger">Entfernen</button></form>{% else %}<span class="pill">Fest eingebaut</span>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<p class="muted">Noch keine zusätzlichen Standorte angelegt.</p>{% endif %}
+  <form method="post" action="/admin/locations" style="margin-top:1rem">
+    <div class="form-grid">
+      <label>Anzeigename<input name="name" required maxlength="100" placeholder="z. B. Heimat-Staging"></label>
+      <label>Stations-/Structure-ID (NPC-Station auch per exaktem Namen)<input name="location_id" required placeholder="z. B. 60008494 oder Jita IV - Moon 4"></label>
+      <label>Typ<select name="kind"><option value="station">NPC-Station</option><option value="structure">Structure</option></select></label>
+      <label>Charakter für Structure-Abfragen
+        <select name="character_id"><option value="">— bei NPC-Station nicht benötigt —</option>{% for character in characters %}<option value="{{ character.id }}">{{ character.name }}</option>{% endfor %}</select>
+      </label>
+    </div>
+    <div class="form-actions"><button class="primary">Standort hinzufügen</button></div>
+  </form>
+</section>
+{% endblock %}

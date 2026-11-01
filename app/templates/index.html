@@ -1,93 +1,121 @@
-<!doctype html>
-<html lang="de">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0b1019">
-<title>{{ app_name }} – EVE Online Dashboard</title>
-<style>
-  :root {
-    color-scheme: dark;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #0b1019;
-    color: #e7edf7;
-  }
-  * { box-sizing: border-box; }
-  body { min-width: 320px; margin: 0; background: radial-gradient(ellipse at 50% 0, #172438 0, #0b1019 52rem); }
-  header, main, footer { width: min(100% - 2rem, 1040px); margin-inline: auto; }
-  header { display: flex; align-items: center; gap: .75rem; padding-block: 1.5rem; }
-  .mark { display: grid; width: 2.5rem; aspect-ratio: 1; place-items: center; border: 1px solid #31527a; border-radius: .75rem; color: #8bc4ff; font-weight: 800; }
-  .brand { font-weight: 700; letter-spacing: .02em; }
-  main { padding-block: 5rem 4rem; }
-  .intro { max-width: 720px; margin-bottom: 3.5rem; }
-  .status { display: inline-flex; align-items: center; gap: .5rem; padding: .4rem .7rem; border: 1px solid #31445d; border-radius: 999px; background: #111b29; color: #b8c8dd; font-size: .85rem; }
-  .dot { width: .5rem; aspect-ratio: 1; border-radius: 50%; background: #e8ad55; }
-  h1 { margin: 1.25rem 0 1rem; font-size: clamp(2.4rem, 7vw, 4.5rem); line-height: 1.05; letter-spacing: -.045em; }
-  h1 span { color: #8bc4ff; }
-  .lead { max-width: 620px; color: #aab8ca; font-size: 1.1rem; line-height: 1.75; }
-  h2 { margin: 0 0 1rem; font-size: 1.2rem; }
-  .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
-  .card { min-height: 190px; padding: 1.25rem; border: 1px solid #253348; border-radius: 1rem; background: rgb(17 26 39 / 85%); }
-  .card h3 { margin: .25rem 0 .65rem; font-size: 1rem; }
-  .card p { margin: 0; color: #9eacc0; font-size: .93rem; line-height: 1.65; }
-  .tag { display: inline-block; margin-bottom: .85rem; color: #8bc4ff; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-  .note { margin-top: 2rem; padding: 1rem 1.1rem; border-left: 2px solid #527da8; background: #101925; color: #aab8ca; line-height: 1.65; }
-  .action { display: inline-flex; margin-top: 1rem; padding: .7rem 1rem; border: 1px solid #4774a2; border-radius: .65rem; background: #16263a; color: #dcecff; font-weight: 650; text-decoration: none; }
-  .action:hover { background: #1c3450; }
-  footer { padding-block: 1.25rem 2rem; border-top: 1px solid #1f2b3d; color: #718198; font-size: .85rem; }
-  @media (max-width: 700px) {
-    main { padding-top: 3rem; }
-    .features { grid-template-columns: 1fr; }
-    .card { min-height: auto; }
-  }
-</style>
-</head>
-<body>
-<header>
-  <div class="mark" aria-hidden="true">E</div>
-  <div class="brand">{{ app_name }}</div>
-</header>
-<main>
-  <section class="intro" aria-labelledby="page-title">
-    <div class="status"><span class="dot" aria-hidden="true"></span> Im Aufbau</div>
-    <h1 id="page-title">New Eden im <span>Überblick.</span></h1>
-    <p class="lead">
-      {{ app_name }} ist das Grundgerüst für ein persönliches EVE-Online-Dashboard.
-      Hier sollen wichtige Informationen und Werkzeuge für deine Charaktere an einem Ort zusammenkommen.
-    </p>
-    {% if character_name %}
-    <a class="action" href="/dashboard">Angemeldet als {{ character_name }} · Dashboard öffnen</a>
-    {% else %}
-    <a class="action" href="/auth/login">Mit EVE anmelden</a>
-    {% endif %}
-  </section>
-
-  <section aria-labelledby="features-title">
-    <h2 id="features-title">Was hier entstehen soll</h2>
-    <div class="features">
-      <article class="card">
-        <span class="tag">Geplant</span>
-        <h3>Charakter-Übersicht</h3>
-        <p>Charaktere, Skills und weitere persönliche Informationen übersichtlich bündeln.</p>
-      </article>
-      <article class="card">
-        <span class="tag">Geplant</span>
-        <h3>Markt &amp; Planung</h3>
-        <p>Preise, Waren und Produktionsplanung für deine Aktivitäten in New Eden im Blick behalten.</p>
-      </article>
-      <article class="card">
-        <span class="tag">Geplant</span>
-        <h3>Universum &amp; Ereignisse</h3>
-        <p>Eine zentrale Anlaufstelle für interessante Entwicklungen und Informationen aus dem Spiel.</p>
-      </article>
+{% extends "base.html" %}
+{% block title %}{{ app_name }} – Übersicht{% endblock %}
+{% block content %}
+<section class="grid two" style="align-items:start">
+  <div>
+    <div class="eyebrow">New Eden · Dashboard</div>
+    <h1>New Eden im Überblick.</h1>
+    <p class="muted">Persönliches, modular aufgebautes Dashboard für EVE Online. Karte und Killfeed sind der Anfang; Charakterdaten und weitere ESI-Module folgen nach Anmeldung.</p>
+    <div class="panel" style="display:flex;gap:2rem;flex-wrap:wrap">
+      <div><span class="eyebrow">EVE-Zeit (UTC)</span><div id="utc-clock" style="font-size:1.6rem;font-variant-numeric:tabular-nums">--:--:--</div></div>
+      <div><span class="eyebrow">Deutsche Zeit</span><div id="local-clock" style="font-size:1.6rem;font-variant-numeric:tabular-nums">--:--:--</div></div>
     </div>
-  </section>
+  </div>
+  <div class="panel">
+    {% if active_character %}
+      <div class="eyebrow">Angemeldet</div>
+      <h2>{{ active_character.name }}</h2>
+      <a class="button primary" href="/dashboard">Char-Dashboard öffnen</a>
+    {% else %}
+      <div class="eyebrow">EVE Online SSO</div>
+      <h2>Dein Charakter, deine Übersicht.</h2>
+      <p class="muted">Melde dich sicher über EVE Online an. Für private Daten werden nur die angeforderten ESI-Berechtigungen genutzt.</p>
+      <a class="button primary" href="/auth/login">Mit EVE anmelden</a>
+    {% endif %}
+  </div>
+</section>
 
-  <p class="note">
-    Dies ist zunächst eine Informationsseite. Die genannten Dashboard-Funktionen sind geplant und
-    werden nach und nach ergänzt; aktuell werden hier noch keine Live-Spieldaten angezeigt.
-  </p>
-</main>
-<footer>{{ app_name }} · Ein Dashboard-Projekt für EVE Online</footer>
-</body>
-</html>
+<section style="margin-top:1.5rem">
+  <div class="grid two" style="align-items:start">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem">
+        <div><div class="eyebrow">New Eden</div><h2 style="margin:.3rem 0 0">Sternenkarte</h2></div>
+        <div class="toolbar" style="margin:0"><button id="zoom-out" type="button" aria-label="Karte verkleinern">−</button><button id="zoom-in" type="button" aria-label="Karte vergrößern">+</button><button id="map-reset" type="button">Reset</button></div>
+      </div>
+      <div class="toolbar" style="margin-top:1rem"><label>Region<select id="map-region"><option value="">Ganz New Eden</option></select></label></div>
+      <div id="map-status" class="muted" style="height:{{ map_height }}px;display:grid;place-items:center">Kartendaten werden geladen …</div>
+      <svg id="eve-map" role="img" aria-label="Karte der EVE-Online-Sternensysteme" viewBox="0 0 900 520" style="display:none;width:{{ map_width }}%;height:{{ map_height }}px;background:#0a111c;border:1px solid #253348;border-radius:.6rem"></svg>
+    </div>
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center">
+        <div><div class="eyebrow">zKillboard · ESI</div><h2 style="margin:.3rem 0 0">Killfeed</h2></div>
+        <button id="refresh-kills" type="button">Aktualisieren</button>
+      </div>
+      <div class="toolbar" style="margin-top:1rem">
+        <label style="flex:1">Regionen (Komma-getrennt)<input id="kill-regions" value="{{ regions|join(', ') }}" placeholder="z. B. The Forge, Delve"></label>
+      </div>
+      <div id="kill-status" class="muted" role="status" style="padding:.8rem 0">{{ killfeed_error or "Killfeed wird geladen …" }}</div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Zeit (UTC)</th><th>System</th><th>Schiff</th><th>Opfer</th><th>Wert</th></tr></thead>
+        <tbody id="kill-rows">
+        {% for kill in kills %}
+          <tr><td>{{ kill.time[11:19] }}</td><td>{{ kill.system }}</td><td>{{ kill.ship }}</td><td><a href="https://zkillboard.com/kill/{{ kill.id }}/" target="_blank" rel="noopener">{{ kill.victim }}</a></td><td>{{ "{:,.0f}".format(kill.value / 1000000) }} Mio ISK</td></tr>
+        {% else %}
+          <tr><td colspan="5" class="muted">Aktuell sind keine Kills verfügbar.</td></tr>
+        {% endfor %}
+        </tbody></table>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+const clockUTC = new Intl.DateTimeFormat("de-DE", {timeZone:"UTC",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
+const clockDE = new Intl.DateTimeFormat("de-DE", {timeZone:"Europe/Berlin",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
+function tickClocks(){const now=new Date();document.getElementById("utc-clock").textContent=clockUTC.format(now);document.getElementById("local-clock").textContent=clockDE.format(now);}
+tickClocks();setInterval(tickClocks,1000);
+const svg=document.getElementById("eve-map"),mapStatus=document.getElementById("map-status");
+let mapScale=1,mapData=null,selectedRegion="";
+function escapeXML(value){return String(value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[char]));}
+function drawMap(){
+  if(!mapData)return;
+  const visibleSystems=selectedRegion?mapData.systems.filter(s=>s.region===selectedRegion):mapData.systems;
+  if(!visibleSystems.length)return;
+  const minX=Math.min(...visibleSystems.map(s=>s.x)),maxX=Math.max(...visibleSystems.map(s=>s.x));
+  const minY=Math.min(...visibleSystems.map(s=>s.y)),maxY=Math.max(...visibleSystems.map(s=>s.y)),pad=35;
+  const sx=(900-2*pad)/(maxX-minX||1), sy=(520-2*pad)/(maxY-minY||1), scale=Math.min(sx,sy)*mapScale;
+  const ox=(900-(maxX-minX)*scale)/2, oy=(520-(maxY-minY)*scale)/2;
+  const points=new Map(visibleSystems.map(s=>[s.id,{x:ox+(s.x-minX)*scale,y:520-oy-(s.y-minY)*scale,s}]));
+  const edges=mapData.connections.map(c=>{const a=points.get(c[0]),b=points.get(c[1]);return a&&b?`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#243d59" stroke-width="1"/>`:''}).join('');
+  const dots=[...points.values()].map(({x,y,s})=>`<circle cx="${x}" cy="${y}" r="2.5" fill="#63a9f5"><title>${s.name} · ${s.region}</title></circle>`).join('');
+  const labels=mapData.region_centers.filter(r=>!selectedRegion||r.name===selectedRegion).map(r=>{
+    const regionSystems=visibleSystems.filter(s=>s.region===r.name);if(!regionSystems.length)return "";
+    const x=regionSystems.reduce((a,s)=>a+points.get(s.id).x,0)/regionSystems.length;
+    const y=regionSystems.reduce((a,s)=>a+points.get(s.id).y,0)/regionSystems.length;
+    return `<text x="${x}" y="${y-12}" fill="#8298b4" text-anchor="middle" font-size="12">${escapeXML(r.name)}</text>`;
+  }).join('');
+  svg.innerHTML=`<g>${edges}${dots}${labels}</g>`;svg.style.display="block";mapStatus.style.display="none";
+}
+fetch("/api/map").then(r=>{if(!r.ok)throw Error();return r.json()}).then(data=>{
+  mapData=data;const select=document.getElementById("map-region");
+  for(const name of data.regions){const option=document.createElement("option");option.value=name;option.textContent=name;select.append(option);}
+  select.onchange=()=>{selectedRegion=select.value;mapScale=1;drawMap();};drawMap();
+}).catch(()=>{mapStatus.textContent="Die Sternenkarte ist nicht verfügbar. Kartendaten aus Fuzzwork konnten nicht geladen werden."});
+document.getElementById("zoom-in").onclick=()=>{mapScale=Math.min(3,mapScale*1.25);drawMap()};
+document.getElementById("zoom-out").onclick=()=>{mapScale=Math.max(.5,mapScale/1.25);drawMap()};
+document.getElementById("map-reset").onclick=()=>{mapScale=1;drawMap()};
+async function loadKills(){
+  const regions=document.getElementById("kill-regions").value;
+  const status=document.getElementById("kill-status"),rows=document.getElementById("kill-rows");
+  status.textContent="Killfeed wird geladen …";
+  try{
+    const response=await fetch(`/api/kills?regions=${encodeURIComponent(regions)}`);
+    if(!response.ok)throw Error();
+    const data=await response.json();
+    rows.replaceChildren();
+    if(!data.length){rows.innerHTML='<tr><td colspan="5" class="muted">Keine Kills für diese Auswahl verfügbar.</td></tr>';}
+    else for(const kill of data){
+      const tr=document.createElement("tr");
+      const values=[kill.time.slice(11,19),kill.system,kill.ship,kill.victim,`${Math.round(kill.value/1e6).toLocaleString("de-DE")} Mio ISK`];
+      for(const value of values){const td=document.createElement("td");td.textContent=value;tr.append(td);}
+      const victim=tr.children[3];victim.textContent="";
+      const link=document.createElement("a");link.href=`https://zkillboard.com/kill/${kill.id}/`;link.target="_blank";link.rel="noopener";link.textContent=kill.victim;victim.append(link);rows.append(tr);
+    }
+    status.textContent=`${data.length} Einträge · Aktualisiert ${new Date().toLocaleTimeString("de-DE")}`;
+  }catch{status.textContent="Killfeed momentan nicht erreichbar.";}
+}
+document.getElementById("refresh-kills").onclick=loadKills;
+document.getElementById("kill-regions").addEventListener("change",loadKills);
+</script>
+{% endblock %}

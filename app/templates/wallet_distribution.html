@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Wallet-Verteilung – {{ app_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Char-Dashboard · Wallet</div><h1>Wallet-Verteilung – {{ active_character.name if active_character else "Charakter" }}</h1>
+{% if needs_scopes %}
+<section class="panel"><p>Für den Wallet-Saldo fehlt `esi-wallet.read_character_wallet.v1`.</p><a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
+{% else %}
+<div class="grid two">
+  <section class="panel"><div class="eyebrow">Kontostand (ESI)</div><strong style="font-size:1.4rem">{{ wallet_balance|isk }} ISK</strong>
+    <form method="post" action="/wallet/plan/start"><div class="form-actions"><button>Als Start übernehmen</button></div></form>
+  </section>
+  <section class="panel"><div class="eyebrow">Start-Kontostand</div><strong style="font-size:1.4rem">{{ plan.start_balance|isk }} ISK</strong>
+    <p class="hint">Start + Eingänge {{ total_pool|isk }} ISK · Ausgaben {{ total_expenses|isk }} ISK</p>
+  </section>
+</div>
+<section class="panel" style="margin-top:1rem">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem"><h2>Verteilung</h2><span class="pill">Verteilt: {{ 100 - unallocated }} %</span></div>
+  <div class="table-wrap"><table><thead><tr><th>Beschriftung</th><th>%</th><th>Anteil</th><th>Ausgegeben</th><th>Verbleibend</th><th></th></tr></thead><tbody>
+    {% for allocation in allocations %}<tr>
+      <td>{{ allocation.name }}</td><td>{{ allocation.percentage|round(2) }} %</td><td>{{ allocation.allocated|isk }} ISK</td><td>{{ allocation.spent|isk }} ISK</td>
+      <td style="color:{{ '#ff8490' if allocation.remaining < 0 else '#67d69c' }}">{{ allocation.remaining|isk }} ISK</td>
+      <td><form method="post" action="/wallet/plan/labels/{{ allocation.id }}/delete"><button class="danger">Entfernen</button></form></td>
+    </tr>{% endfor %}
+    <tr><td>Nicht verteilt / ohne Zuordnung</td><td>{{ unallocated|round(2) }} %</td><td>{{ (total_pool * unallocated / 100)|isk }} ISK</td><td>—</td><td>{{ (total_pool * unallocated / 100)|isk }} ISK</td><td></td></tr>
+    <tr><th>Gesamt</th><th>100 %</th><th>{{ total_pool|isk }} ISK</th><th>{{ total_expenses|isk }} ISK</th><th>{{ (total_pool - total_expenses)|isk }} ISK</th><th></th></tr>
+  </tbody></table></div>
+</section>
+<div class="grid three" style="margin-top:1rem">
+  <section class="panel"><h2>Beschriftungen &amp; Prozente</h2><p class="hint">Anteil vom Start-Kontostand plus Eingängen. Summe bis maximal 100 %.</p>
+    <form method="post" action="/wallet/plan/labels">
+      <label>Beschriftung<input name="name" maxlength="80" required placeholder="z. B. Ersatzschiffe"></label>
+      <label style="margin-top:.7rem">Prozent<input type="number" name="percentage" min="0" max="100" step=".01" required></label>
+      <div class="form-actions"><button class="primary">Beschriftung hinzufügen</button></div>
+    </form>
+  </section>
+  <section class="panel"><h2>Eingänge</h2><p class="hint">Werden zum Start-Kontostand addiert.</p>
+    <form method="post" action="/wallet/plan/entries">
+      <input type="hidden" name="kind" value="income">
+      <label>Datum<input type="date" name="entry_date" required></label>
+      <label style="margin-top:.6rem">Beschreibung<input name="description" maxlength="120" required></label>
+      <label style="margin-top:.6rem">Betrag (ISK)<input type="number" name="amount" min=".01" step=".01" required></label>
+      <div class="form-actions"><button class="primary">Eingang hinzufügen</button></div>
+    </form>
+  </section>
+  <section class="panel"><h2>Ausgaben</h2><p class="hint">Werden von der gewählten Beschriftung abgezogen.</p>
+    <form method="post" action="/wallet/plan/entries">
+      <input type="hidden" name="kind" value="expense">
+      <label>Datum<input type="date" name="entry_date" required></label>
+      <label style="margin-top:.6rem">Beschreibung<input name="description" maxlength="120" required></label>
+      <label style="margin-top:.6rem">Betrag (ISK)<input type="number" name="amount" min=".01" step=".01" required></label>
+      <label style="margin-top:.6rem">Beschriftung<select name="label_id"><option value="">Ohne Zuordnung</option>{% for label in plan.labels %}<option value="{{ label.id }}">{{ label.name }}</option>{% endfor %}</select></label>
+      <div class="form-actions"><button class="primary">Ausgabe hinzufügen</button></div>
+    </form>
+  </section>
+</div>
+<section class="panel" style="margin-top:1rem"><h2>Manuelle Einträge</h2><div class="table-wrap"><table><thead><tr><th>Datum</th><th>Art</th><th>Beschreibung</th><th>Beschriftung</th><th>Betrag</th><th></th></tr></thead><tbody>
+{% for entry in plan.entries %}<tr><td>{{ entry.entry_date }}</td><td>{{ "Eingang" if entry.kind == "income" else "Ausgabe" }}</td><td>{{ entry.description }}</td><td>{% for label in plan.labels %}{% if label.id == entry.label_id %}{{ label.name }}{% endif %}{% endfor %}</td><td>{{ entry.amount|isk }} ISK</td><td><form method="post" action="/wallet/plan/entries/{{ entry.id }}/delete"><button class="danger">Entfernen</button></form></td></tr>
+{% else %}<tr><td colspan="6" class="muted">Noch keine manuellen Einträge.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endif %}
+{% endblock %}

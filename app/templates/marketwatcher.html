@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Marketwatcher – {{ app_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Char-Dashboard · Markt</div><h1>Marketwatcher</h1>
+<div class="toolbar">
+  <form method="get" action="/marketwatcher"><select name="watchlist_id" onchange="this.form.submit()">{% for item in watchlists %}<option value="{{ item.id }}" {% if item.id == watchlist.id %}selected{% endif %}>{{ item.name }}</option>{% endfor %}</select></form>
+  <form method="post" action="/marketwatcher/lists"><input name="name" maxlength="60" required placeholder="Neue Liste"><button class="primary">Liste erstellen</button></form>
+  {% if watchlists|length > 1 %}<form method="post" action="/marketwatcher/lists/{{ watchlist.id }}/delete" onsubmit="return confirm('Liste endgültig löschen?')"><button class="danger">Liste löschen</button></form>{% endif %}
+</div>
+<section class="panel" style="margin-bottom:1rem">
+  <h2>{{ watchlist.name }}</h2>
+  <form method="post" action="/marketwatcher/locations">
+    <input type="hidden" name="watchlist_id" value="{{ watchlist.id }}">
+    <div class="eyebrow" style="margin-bottom:.7rem">Standorte · Preise abfragen aus</div>
+    <div class="toolbar">{% for location in locations %}<label style="display:flex;align-items:center;gap:.45rem"><input type="checkbox" name="location_ids" value="{{ location.id }}" {% if location.id in watchlist.location_ids %}checked{% endif %}>{{ location.name }}</label>{% endfor %}</div>
+    <button>Standorte speichern</button>
+  </form>
+</section>
+<section class="panel" style="margin-bottom:1rem">
+  <h2>Items hinzufügen</h2>
+  <div class="grid two">
+    <form method="post" action="/marketwatcher/items">
+      <input type="hidden" name="watchlist_id" value="{{ watchlist.id }}">
+      <label>Item exakt suchen<input name="name" required placeholder="z. B. Hulk oder Damage Control II"></label>
+      <label style="margin-top:.6rem">Menge<input type="number" name="quantity" min="1" max="1000000" value="1" required></label>
+      <div class="form-actions"><button class="primary">Item hinzufügen</button></div>
+    </form>
+    <form method="post" action="/marketwatcher/import">
+      <input type="hidden" name="watchlist_id" value="{{ watchlist.id }}">
+      <label>Fitting importieren (EFT)<textarea name="fitting" required placeholder="[Hulk, My Hulk]&#10;Mining Laser Upgrade II&#10;Mining Laser Upgrade II"></textarea></label>
+      <div class="form-actions"><button>Fitting importieren</button></div>
+    </form>
+  </div>
+</section>
+<section class="panel">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
+    <div><h2>Marktpreise</h2><p class="hint">Letzte Abfrage: <span id="last-update">{{ last_updated or "Noch keine Abfrage" }}</span> · automatisch alle 15 Minuten</p><p id="market-status" class="hint" role="status"></p></div>
+    <form method="post" action="/marketwatcher/refresh"><input type="hidden" name="watchlist_id" value="{{ watchlist.id }}"><button class="primary" id="refresh-button">Jetzt aktualisieren</button></form>
+  </div>
+  {% if not watchlist["items"] %}<p class="muted">Füge Items oder ein EFT-Fitting hinzu, um Marktpreise zu verfolgen.</p>
+  {% elif not watchlist.location_ids %}<p class="muted">Wähle mindestens einen Standort für die Preisabfrage aus.</p>
+  {% else %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Item</th><th>Menge</th>{% for location in locations %}{% if location.id in watchlist.location_ids %}<th>{{ location.name }} · Verkauf</th><th>{{ location.name }} · Kauf</th><th>24 h</th>{% endif %}{% endfor %}<th></th></tr></thead>
+    <tbody>
+      {% for item in watchlist["items"] %}<tr>
+        <td>{{ item.name }}</td><td>{{ item.quantity }}</td>
+        {% for location in locations %}{% if location.id in watchlist.location_ids %}
+          {% set quote = prices.get(item.id, {}).get(location.id) %}
+          <td>{% if quote and quote.lowest_sell is not none %}{{ quote.lowest_sell|isk }}{% else %}—{% endif %}</td>
+          <td>{% if quote and quote.highest_buy is not none %}{{ quote.highest_buy|isk }}{% else %}—{% endif %}</td>
+          <td>{% if quote and quote.lowest_sell is not none and quote.prior_sell %}{% set delta = (quote.lowest_sell - quote.prior_sell) / quote.prior_sell * 100 %}<span style="color:{{ '#67d69c' if delta >= 0 else '#ff8490' }}">{{ "▲" if delta >= 0 else "▼" }} {{ "%.1f"|format(delta|abs) }} %</span>{% else %}—{% endif %}</td>
+        {% endif %}{% endfor %}
+        <td><form method="post" action="/marketwatcher/items/{{ item.id }}/delete"><input type="hidden" name="watchlist_id" value="{{ watchlist.id }}"><button class="danger" aria-label="Item entfernen">✕</button></form></td>
+      </tr>{% endfor %}
+      <tr><th>Summe (Menge × Preis)</th><th></th>{% for location in locations %}{% if location.id in watchlist.location_ids %}
+        {% set sell_total = namespace(value=0) %}{% set buy_total = namespace(value=0) %}
+        {% for item in watchlist["items"] %}{% set quote = prices.get(item.id, {}).get(location.id) %}{% if quote and quote.lowest_sell is not none %}{% set sell_total.value = sell_total.value + quote.lowest_sell * item.quantity %}{% endif %}{% if quote and quote.highest_buy is not none %}{% set buy_total.value = buy_total.value + quote.highest_buy * item.quantity %}{% endif %}{% endfor %}
+        <th>{{ sell_total.value|isk }}</th><th>{{ buy_total.value|isk }}</th><th></th>
+      {% endif %}{% endfor %}<th></th></tr>
+    </tbody>
+  </table></div>
+  {% endif %}
+</section>
+<script>
+const last={{ (last_updated or "")|tojson }};
+if(!last || Date.now()-Date.parse(last.replace(" ","T")+"Z")>900000){
+  const form=document.querySelector('form[action="/marketwatcher/refresh"]');
+  if(form){const button=form.querySelector("button"),status=document.getElementById("market-status");button.disabled=true;button.textContent="Preise werden aktualisiert …";fetch(form.action,{method:"POST",body:new FormData(form)}).then(response=>{if(!response.ok)throw Error();location.reload();}).catch(()=>{button.disabled=false;button.textContent="Jetzt aktualisieren";status.textContent="Preisabfrage fehlgeschlagen. Prüfe Standortzugriff und ESI-Berechtigungen.";});}
+}
+setInterval(()=>location.reload(),900000);
+</script>
+{% endblock %}

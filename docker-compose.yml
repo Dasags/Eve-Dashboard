@@ -1,13 +1,13 @@
 services:
   eve-world:
-    image: ghcr.io/DEIN-GITHUB-NAME/eve-dashboard:latest
-    # build: .   # zum lokalen Bauen einkommentieren
+    image: eve-dashboard:latest
+    build: .
     container_name: eve-world
     restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/data
+      - eve-dashboard-data:/data
     environment:
       APP_NAME: "EVE-World"
       CONTACT: "dein-name@example.com"        # User-Agent für zKillboard/ESI
@@ -20,7 +20,7 @@ services:
       #   esi-markets.structure_markets.v1, esi-universe.read_structures.v1
       EVE_CLIENT_ID: ""
       EVE_CLIENT_SECRET: ""
-      SESSION_SECRET: "bitte-durch-einen-langen-zufaelligen-wert-ersetzen"
+      SESSION_SECRET: "${SESSION_SECRET:-}"
 
       # --- Admin-Login Variante 1: reines Passwort (/admin) ---
       ADMIN_PASSWORD: "bitte-aendern"
@@ -31,3 +31,6 @@ services:
       # OIDC_CLIENT_ID: ""
       # OIDC_CLIENT_SECRET: ""
       # OIDC_ADMIN_GROUP: "eve-admins"          # optional: nur diese Authentik-Gruppe darf rein
+
+volumes:
+  eve-dashboard-data:

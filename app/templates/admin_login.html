@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Admin-Anmeldung – {{ app_name }}{% endblock %}
+{% block content %}
+<section style="max-width:440px;margin:3rem auto">
+  <div class="eyebrow">Administration</div><h1>Admin</h1>
+  {% if error %}<p class="notice error" role="alert">{{ error }}</p>{% endif %}
+  {% if oidc_enabled %}<p><a class="button" href="/admin/oidc/login">Mit Authentik anmelden</a></p>{% endif %}
+  <form method="post" action="/admin/login" class="panel">
+    <label>Passwort<input type="password" name="password" autocomplete="current-password" required></label>
+    <div class="form-actions"><button class="primary" type="submit">Anmelden</button></div>
+  </form>
+  <p class="hint">Das Admin-Passwort wird als <code>ADMIN_PASSWORD</code> in der Compose-Konfiguration festgelegt.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Charaktere – {{ app_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Konto</div><h1>Charaktere</h1>
+<section class="panel">
+  <p class="muted">Ein Hauptcharakter mit beliebig vielen Alts. Für jedes Modul kannst du einen Charakter auswählen.</p>
+  <div class="grid">
+    {% for character in characters %}
+    <article class="card" style="display:flex;justify-content:space-between;align-items:center;gap:1rem">
+      <div><strong>{{ character.name }}</strong><div class="hint">{{ "Hauptcharakter" if character.is_main else "Alt-Charakter" }} · {{ "aktiv" if active_character and active_character.id == character.id else "inaktiv" }}</div></div>
+      <div class="toolbar" style="margin:0">
+        {% if active_character and active_character.id != character.id %}
+        <form method="post" action="/auth/chars/select"><input type="hidden" name="character_id" value="{{ character.id }}"><button>Auswählen</button></form>
+        {% endif %}
+        {% if not character.is_main %}
+        <form method="post" action="/auth/chars/remove" onsubmit="return confirm('Alt-Charakter wirklich entfernen?')"><input type="hidden" name="character_id" value="{{ character.id }}"><button class="danger">Entfernen</button></form>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  <div class="form-actions"><a class="button primary" href="/auth/login?add_alt=true">Alt-Charakter hinzufügen (EVE-Login)</a></div>
+</section>
+<section class="panel" style="margin-top:1rem">
+  <h2>Konto löschen</h2><p class="hint">Entfernt Hauptcharakter und alle Alts samt gespeicherten Tokens von diesem Server.</p>
+  <form method="post" action="/auth/chars/delete-account" onsubmit="return confirm('Konto und alle gespeicherten Daten endgültig löschen?')"><button class="danger">Konto löschen</button></form>
+</section>
+{% endblock %}

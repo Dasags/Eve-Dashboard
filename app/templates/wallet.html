@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Wallet – {{ app_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Char-Dashboard · Wallet</div><h1>Wallet – {{ active_character.name if active_character else "Charakter" }}</h1>
+{% if needs_scopes %}
+<section class="panel"><h2>Wallet-Berechtigung fehlt</h2><p class="muted">Erlaube den ESI-Scope `esi-wallet.read_character_wallet.v1`, um den persönlichen Kontostand, Journal und Marktgeschäfte zu laden.</p><a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
+{% else %}
+<div class="grid two">
+  <section class="panel"><div class="eyebrow">Kontostand</div><div style="font-size:1.75rem;font-weight:700;margin-top:.4rem">{{ wallet|isk }} ISK</div></section>
+  <section class="panel"><div class="eyebrow">Letzte 30 Tage</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-top:.5rem">
+      <div><span class="hint">Einkommen</span><div style="color:#67d69c">+{{ income_30|isk }} ISK</div></div>
+      <div><span class="hint">Ausgaben</span><div style="color:#ff8490">−{{ expenses_30|isk }} ISK</div></div>
+      <div><span class="hint">Netto</span><div>{{ net_30|isk }} ISK</div></div>
+    </div>
+  </section>
+</div>
+<section class="panel" style="margin-top:1rem">
+  <div class="toolbar">
+    <a class="button {% if view == 'journal' %}primary{% endif %}" href="/wallet?view=journal">Journal</a>
+    <a class="button {% if view == 'transactions' %}primary{% endif %}" href="/wallet?view=transactions">Marktgeschäfte</a>
+    <a class="button" href="/wallet/distribution">Wallet-Verteilung</a>
+  </div>
+  {% if view == "transactions" %}
+    <div class="table-wrap"><table><thead><tr><th>Datum</th><th>Art</th><th>Beschreibung</th><th>Menge</th><th>Preis/Stk.</th><th>Gesamt</th></tr></thead><tbody>
+      {% for item in transactions %}<tr><td>{{ item.date[:16]|replace("T"," ") }}</td><td>{{ "Kauf" if item.is_buy else "Verkauf" }}</td><td>{{ item.type_name }} · {{ item.location_name }}</td><td>{{ item.quantity }}</td><td>{{ item.unit_price|isk }} ISK</td><td>{{ (item.quantity * item.unit_price)|isk }} ISK</td></tr>
+      {% else %}<tr><td colspan="6" class="muted">Keine Marktgeschäfte verfügbar.</td></tr>{% endfor %}
+    </tbody></table></div>
+  {% else %}
+    <div class="table-wrap"><table><thead><tr><th>Datum</th><th>Art</th><th>Beschreibung</th><th>Betrag</th><th>Saldo</th></tr></thead><tbody>
+      {% for item in journal %}<tr>
+        <td>{{ item.date[:16]|replace("T"," ") }}</td><td>{{ item.ref_type|replace("_"," ")|title }}</td>
+        <td>{{ item.first_party_name }} → {{ item.second_party_name }}</td>
+        <td style="color:{{ '#67d69c' if item.amount >= 0 else '#ff8490' }}">{{ "+" if item.amount >= 0 else "−" }}{{ item.amount|abs|isk }} ISK</td>
+        <td>{{ item.balance|isk if item.balance is defined else "—" }} ISK</td>
+      </tr>{% else %}<tr><td colspan="5" class="muted">Keine Journaleinträge verfügbar.</td></tr>{% endfor %}
+    </tbody></table></div>
+  {% endif %}
+  <p class="hint">Die Liste zeigt bis zu 100 aktuelle ESI-Einträge. Der Wallet-Verteilung liegt ein separat gepflegter Plan zugrunde.</p>
+</section>
+{% endif %}
+{% endblock %}
