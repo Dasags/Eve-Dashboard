@@ -1730,6 +1730,7 @@ def remove_location(request: Request, location_pk: int):
 async def kills(
     regions: str | None = None,
     limit: int | None = Query(None, ge=5, le=50),
+    system_id: int | None = Query(None, ge=30000000, le=32000000),
 ):
     selected_regions = (
         [value.strip() for value in regions.split(",") if value.strip()]
@@ -1744,6 +1745,7 @@ async def kills(
         return await get_kills(
             regions=selected_regions,
             limit=limit or int(storage.get_setting("killfeed_count", "15")),
+            system_id=system_id,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

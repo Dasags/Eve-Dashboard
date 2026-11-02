@@ -7,7 +7,7 @@ import httpx
 ESI = "https://esi.evetech.net/latest"
 ZKILL = "https://zkillboard.com/api"
 TTL = 60
-_cache: dict[tuple[tuple[str, ...], int], tuple[float, list[dict]]] = {}
+_cache: dict[tuple[tuple[str, ...], int, int | None], tuple[float, list[dict]]] = {}
 _lock = asyncio.Lock()
 
 
@@ -36,14 +36,17 @@ async def _region_ids(client: httpx.AsyncClient, regions: list[str]) -> list[int
     return list(dict.fromkeys(region_ids))
 
 
-async def _fetch(regions: list[str], limit: int) -> list[dict]:
+async def _fetch(regions: list[str], limit: int, system_id: int | None = None) -> list[dict]:
     async with httpx.AsyncClient(headers=_headers(), timeout=20) as client:
-        region_ids = await _region_ids(client, regions) if regions else []
-        paths = (
-            [f"/kills/regionID/{region_id}/" for region_id in region_ids]
-            if region_ids
-            else ["/kills/"]
-        )
+        region_ids = await _region_ids(client, regions) if regions and not system_id else []
+        if system_id:
+            paths = [f"/kills/systemID/{system_id}/"]
+        else:
+            paths = (
+                [f"/kills/regionID/{region_id}/" for region_id in region_ids]
+                if region_ids
+                else ["/kills/"]
+            )
         responses = await asyncio.gather(
             *(client.get(f"{ZKILL}{path}") for path in paths)
         )
@@ -106,14 +109,16 @@ async def _fetch(regions: list[str], limit: int) -> list[dict]:
     ]
 
 
-async def get_kills(regions: list[str] | None = None, limit: int = 15) -> list[dict]:
+async def get_kills(
+    regions: list[str] | None = None, limit: int = 15, system_id: int | None = None
+) -> list[dict]:
     requested_regions = tuple(
         sorted({region.strip() for region in (regions or []) if region.strip()}, key=str.casefold)
     )
     if len(requested_regions) > 20:
         raise ValueError("Es können höchstens 20 Regionen gleichzeitig abgefragt werden.")
     limit = min(50, max(5, int(limit)))
-    key = (requested_regions, limit)
+    key = (requested_regions, limit, system_id)
     cached = _cache.get(key)
     if cached and time.time() - cached[0] < TTL:
         return cached[1][:limit]
@@ -122,7 +127,7 @@ async def get_kills(regions: list[str] | None = None, limit: int = 15) -> list[d
         if cached and time.time() - cached[0] < TTL:
             return cached[1][:limit]
         try:
-            result = await asyncio.wait_for(_fetch(list(requested_regions), limit), timeout=8)
+            result = await asyncio.wait_for(_fetch(list(requested_regions), limit, system_id), timeout=8)
         except (asyncio.TimeoutError, httpx.HTTPError):
             if cached:
                 _cache[key] = (time.time() - TTL + 30, cached[1])

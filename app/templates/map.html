@@ -32,6 +32,8 @@
   .map-sidebox h2 { margin:.25rem 0 .65rem; font-size:.95rem; }
   .map-sidebox .eyebrow { font-size:.67rem; }
   .map-info { min-height:90px; margin-bottom:.55rem; }
+  .system-feed { margin-top:.7rem; padding-top:.6rem; border-top:1px solid #1f2b3d; max-height:42vh; overflow:auto; }
+  .system-feed div { padding:.3rem 0; border-bottom:1px solid rgb(120 160 220 / 12%); font-size:.72rem; line-height:1.4; }
   .map-details { color:#aab8ca; font-size:.76rem; line-height:1.75; }
   .map-legend { display:grid; gap:.45rem; }
   .legend-row { display:flex; align-items:center; gap:.5rem; color:#aab8ca; font-size:.74rem; }
@@ -374,7 +376,26 @@
         button.style.display="block";button.style.marginTop=".6rem";button.addEventListener("click",()=>selectRegion(node.region));systemDetails.append(button);
       }
     }
+    if(!isRegion)loadSystemKills(node);
     draw();
+  }
+  async function loadSystemKills(node){
+    const box=document.createElement("div");box.className="system-feed";box.textContent="Kills werden geladen …";systemDetails.append(box);
+    try{
+      const response=await fetch(`/api/kills?system_id=${node.id}&limit=20`);if(!response.ok)throw new Error();
+      const rows=await response.json();
+      if(selected!==node)return;
+      box.replaceChildren();
+      const head=document.createElement("div");head.textContent=`Letzte Kills in ${node.name}`;head.style.color="#e5e9f1";box.append(head);
+      if(!rows.length){const none=document.createElement("div");none.textContent="Keine aktuellen Killmails.";box.append(none);return;}
+      for(const kill of rows){
+        const row=document.createElement("div"),link=document.createElement("a");
+        link.href=`https://zkillboard.com/kill/${kill.id}/`;link.target="_blank";link.rel="noopener";
+        link.textContent=`${new Date(kill.time).toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})} · ${kill.ship}`;
+        const info=document.createElement("span");info.textContent=` · ${kill.victim} · ${(kill.value/1e6).toFixed(1)} Mio`;
+        row.append(link,info);box.append(row);
+      }
+    }catch{if(selected===node)box.textContent="Kills nicht erreichbar.";}
   }
   function selectRegion(name){
     selectedRegion=name||"";regionSelect.value=selectedRegion;selected=null;scale=1;panX=0;panY=0;
