@@ -27,7 +27,7 @@ from app.services.market import resolve_type_ids
 from app.services.market import adjusted_prices as get_adjusted_prices
 from app.services.invention import DECRYPTORS, apply_invention, plan_invention
 from app.services.production import apply_market_and_stock, create_plan, skill_time_factor
-from app.services.planetary import add_location_prices, analyze as analyze_planetary, create_plan as create_planetary_plan
+from app.services.planetary import add_location_prices, analyze as analyze_planetary, create_plan as create_planetary_plan, product_catalog
 from app.services.sde import field, invention_recipes, manufacturing_recipes, planetary_recipes, type_catalog
 
 APP_NAME = os.getenv("APP_NAME", "EVE-World")
@@ -1231,8 +1231,16 @@ async def calculate_industry(
     )
 
 
+async def pi_products() -> list[dict]:
+    try:
+        types, _ = await type_catalog()
+        return product_catalog(await planetary_recipes(), types)
+    except (httpx.HTTPError, OSError, ValueError, KeyError):
+        return []
+
+
 @app.get("/planetary-industry")
-def planetary_industry_page(request: Request):
+async def planetary_industry_page(request: Request):
     require_account(request)
     require_module(request, "planetary-industry")
     locations = storage.list_locations()
@@ -1247,6 +1255,7 @@ def planetary_industry_page(request: Request):
         },
         error=None,
         locations=locations,
+        products=await pi_products(),
     )
 
 
@@ -1301,6 +1310,7 @@ async def calculate_planetary_industry(
             product_id, quantity, 0, recipes, types, group_names
         )
         type_ids = {item["type_id"] for item in plan["tree"]}
+        type_ids |= {item["type_id"] for item in raw_plan["tree"]}
         type_ids.add(product_id)
         semaphore = asyncio.Semaphore(8)
 
@@ -1343,6 +1353,7 @@ async def calculate_planetary_industry(
         form_data=form_data,
         error=None,
         locations=locations,
+        products=await pi_products(),
     )
 
 
