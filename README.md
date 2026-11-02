@@ -4,7 +4,8 @@ Ein webbasiertes EVE-Online-Dashboard mit EVE-SSO-Anmeldung, Charakteren und Pro
 
 ## Funktionen
 
-- **Startseite:** Sternenkarte, konfigurierbarer Killfeed und Projektinformation.
+- **Übersicht:** Vollbreite Space-Oberfläche mit EVE-/Lokalzeit, Pilotenkarten (Wallet, aktueller Skill, Corporation) und Killfeed.
+- **Sternenkarte:** Eigene interaktive 2D-Karte mit Regionen-, Sicherheits-, Killmail- und Incursion-Filtern; Systemdaten und Sprungverbindungen kommen aus dem EVE-SDE/Fuzzwork-Cache. DOTLAN wird als externe Referenz verlinkt, dessen Kartengrafiken werden nicht kopiert.
 - **Charaktere:** EVE-SSO, Main-/Alt-Verwaltung, Charakter-, Corporation- und Allianzprofil.
 - **Skills:** trainierte Skills, Skillpunkte und Skill-Warteschlange.
 - **Wallet:** Kontostand, Journal, Transaktionen und manuelle Verteilungsplanung.

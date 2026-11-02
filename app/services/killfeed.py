@@ -96,6 +96,7 @@ async def _fetch(regions: list[str], limit: int) -> list[dict]:
         {
             "id": mail["killmail_id"],
             "time": mail["killmail_time"],
+            "system_id": mail["solar_system_id"],
             "system": names.get(mail["solar_system_id"], str(mail["solar_system_id"])),
             "ship": names.get(mail["victim"].get("ship_type_id"), "Unbekannt"),
             "victim": names.get(mail["victim"].get("character_id"), "NPC/Struktur"),

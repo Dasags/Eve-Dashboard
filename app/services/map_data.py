@@ -45,6 +45,11 @@ async def _download() -> dict:
                     "region": region_names.get(region_id, str(region_id)),
                     "x": float(row["x"]),
                     "y": float(row["z"]),
+                    "security": (
+                        float(row.get("security") or row.get("securityStatus"))
+                        if row.get("security") or row.get("securityStatus")
+                        else None
+                    ),
                 }
             )
         except (KeyError, TypeError, ValueError):
@@ -87,14 +92,21 @@ async def get_map_data() -> dict:
         if _cached and time.monotonic() - _cached_at < _TTL_SECONDS:
             return _cached
         if _CACHE.exists() and time.time() - _CACHE.stat().st_mtime < _TTL_SECONDS:
-            _cached = json.loads(_CACHE.read_text(encoding="utf-8"))
-            _cached_at = time.monotonic()
-            return _cached
+            cached = json.loads(_CACHE.read_text(encoding="utf-8"))
+            if all(
+                isinstance(system.get("security"), (int, float))
+                for system in cached.get("systems", [])
+            ):
+                _cached = cached
+                _cached_at = time.monotonic()
+                return _cached
         try:
             result = await _download()
         except (httpx.HTTPError, KeyError, TypeError, ValueError):
             if _CACHE.exists():
                 _cached = json.loads(_CACHE.read_text(encoding="utf-8"))
+                for system in _cached.get("systems", []):
+                    system.setdefault("security", None)
                 _cached_at = time.monotonic()
                 return _cached
             raise
