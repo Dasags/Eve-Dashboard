@@ -152,3 +152,65 @@ def add_location_prices(plan: dict, quotes: dict[int, dict]) -> dict:
         ),
         "missing_prices": missing,
     }
+
+
+def analyze(plan: dict, locations: list[dict]) -> dict:
+    """Aggregate per-station results into best-station, tier and item views."""
+    for entry in locations:
+        summary = entry["summary"]
+        cost, margin = summary["cost"], summary["margin"]
+        summary["margin_pct"] = margin / cost * 100 if margin is not None and cost else None
+    ranked = [entry for entry in locations if entry["summary"]["margin"] is not None]
+    best = max(ranked, key=lambda entry: entry["summary"]["margin"]) if ranked else None
+    best_ids = {id(best)} if best else set()
+
+    def price_row(row: dict) -> dict:
+        prices = []
+        for entry in locations:
+            price = entry["quotes"].get(row["type_id"], {}).get("lowest_sell")
+            prices.append({"location": entry["location"], "price": price})
+        priced = [item for item in prices if item["price"] is not None]
+        cheapest = min(priced, key=lambda item: item["price"]) if priced else None
+        priciest = max(priced, key=lambda item: item["price"]) if priced else None
+        return {
+            **row,
+            "prices": prices,
+            "cheapest": cheapest,
+            "spread_pct": (
+                (priciest["price"] - cheapest["price"]) / cheapest["price"] * 100
+                if cheapest and cheapest["price"]
+                else None
+            ),
+        }
+
+    items = [price_row(row) for row in plan["tree"]]
+    tiers: dict[int | None, dict] = {}
+    for item in items:
+        group = tiers.setdefault(
+            item["tier"],
+            {"tier": item["tier"], "items": 0, "quantity": 0, "buy_cost": 0.0, "complete": True, "seconds": 0},
+        )
+        group["items"] += 1
+        group["quantity"] += item["quantity"]
+        group["seconds"] += item["seconds"]
+        if item["kind"] == "Kaufen":
+            if item["cheapest"]:
+                group["buy_cost"] += item["cheapest"]["price"] * item["quantity"]
+            else:
+                group["complete"] = False
+    tier_rows = sorted(tiers.values(), key=lambda row: (row["tier"] is None, row["tier"] or 0))
+    return {
+        "best": best,
+        "best_ids": best_ids,
+        "items": items,
+        "tiers": tier_rows,
+        "cheapest_total": (
+            sum(
+                row["cheapest"]["price"] * row["quantity"]
+                for row in items
+                if row["kind"] == "Kaufen" and row["cheapest"]
+            )
+            if all(row["cheapest"] for row in items if row["kind"] == "Kaufen")
+            else None
+        ),
+    }

@@ -16,32 +16,61 @@
   </section>
 </form>
 {% if result %}
-  {% set plan = result.plan %}
+  {% set plan = result.plan %}{% set analysis = result.analysis %}{% set best = analysis.best %}
   {% if plan.materials|selectattr("tier","equalto",none)|list %}<p class="notice">Für mindestens ein SDE-Item konnte die PI-Stufe nicht bestimmt werden.</p>{% endif %}
+
   <section class="panel" style="margin-top:1rem">
-    <h2>{{ plan.product }} · {{ plan.requested_quantity }} angefragt, {{ plan.output_quantity }} produziert</h2>
-    <div class="table-wrap"><table><thead><tr><th>Standort</th><th>Einkaufskosten</th><th>Produktwert (Verkauf)</th><th>Marge</th></tr></thead><tbody>
-      {% for location in result.locations %}<tr>
-        <td>{{ location.location.name }}</td>
-        <td>{{ location.summary.cost|isk if location.summary.cost is not none else "Unvollständig" }}{% if location.summary.cost is not none %} ISK{% endif %}</td>
-        <td>{{ location.summary.product_value|isk if location.summary.product_value is not none else "Kein Marktpreis" }}{% if location.summary.product_value is not none %} ISK{% endif %}</td>
-        <td>{{ location.summary.margin|isk if location.summary.margin is not none else "Nicht berechenbar" }}{% if location.summary.margin is not none %} ISK{% endif %}</td>
-      </tr>{% if location.summary.missing_prices %}<tr><td colspan="4" class="hint">Kein Verkaufspreis verfügbar für: {{ location.summary.missing_prices|join(", ") }}. Rohstoffe ohne Marktpreis bleiben unbewertet.</td></tr>{% endif %}{% endfor %}
+    <h2>Produktionskette – {{ plan.product }}</h2>
+    <p class="hint">{{ plan.requested_quantity }} angefragt, {{ plan.output_quantity }} produziert · Einkauf ab P{{ plan.buy_level }}</p>
+    <div class="table-wrap"><table><thead><tr><th>Schritt</th><th>Zyklen</th><th>Zykluszeit</th><th>Dauer</th><th>Ausstoß</th></tr></thead><tbody>
+      {% for step in plan.steps %}<tr><td>{{ "P" ~ step.tier if step.tier is not none }} · {{ step.name }}</td><td>{{ step.cycles }}</td><td>{{ (step.seconds / step.cycles)|duration if step.cycles else "—" }}</td><td>{{ step.seconds|duration }}</td><td>{{ step.quantity }}</td></tr>{% else %}<tr><td colspan="5" class="muted">Keine Produktionsschritte gefunden.</td></tr>{% endfor %}
     </tbody></table></div>
-    <p class="hint">Dauer (nacheinander): {{ plan.sequential_seconds|duration }} · Dauer (parallel, längste Kette): {{ plan.critical_seconds|duration }} · Rohstoffe/Einkauf: {{ plan.materials|length }} Positionen · Produktionslinien: {{ plan.steps|length }}</p>
+    <p class="hint">Dauer (nacheinander): {{ plan.sequential_seconds|duration }} · Dauer (parallel, längste Kette): {{ plan.critical_seconds|duration }} · Produktionslinien: {{ plan.steps|length }}</p>
+    <h3>Einzukaufende Rohstoffe</h3>
+    <div class="table-wrap"><table><thead><tr><th>Material</th><th>Stufe</th><th>Bedarf</th></tr></thead><tbody>
+      {% for item in plan.materials %}<tr><td>{{ item.name }}</td><td>{{ "P" ~ item.tier if item.tier is not none else "—" }}</td><td>{{ item.quantity }}</td></tr>{% else %}<tr><td colspan="3" class="muted">Keine einzukaufenden Rohstoffe.</td></tr>{% endfor %}
+    </tbody></table></div>
   </section>
-  <section class="panel" style="margin-top:1rem"><h2>Produktionskette</h2><div class="table-wrap"><table><thead><tr><th>Material</th><th>Stufe</th><th>Bedarf</th>{% for location in result.locations %}<th>{{ location.location.name }} · Stk.</th><th>{{ location.location.name }} · Kosten</th>{% endfor %}<th>Schritt</th></tr></thead><tbody>
-    {% for row in plan.tree %}<tr>
-      <td>{% for _ in range(row.depth) %}↳ {% endfor %}{{ row.name }}</td><td>{{ "P" ~ row.tier if row.tier is not none else "—" }}</td><td>{{ row.quantity }}</td>
-      {% for location in result.locations %}{% set quote = location.quotes.get(row.type_id,{}) %}<td>{{ quote.lowest_sell|isk if quote.lowest_sell is not none else "—" }}</td><td>{{ (quote.lowest_sell * row.quantity)|isk if quote.lowest_sell is not none else "—" }}</td>{% endfor %}
-      <td>{% if row.kind == "Herstellen" %}{{ row.cycles }} Zyklen · {{ row.seconds|duration }}{% else %}Kaufen{% endif %}</td>
-    </tr>{% endfor %}
-  </tbody></table></div></section>
-  <section class="panel" style="margin-top:1rem"><h2>Produktionsschritte (eine Fabrik je Schritt)</h2><div class="table-wrap"><table><thead><tr><th>Schritt</th><th>Schema</th><th>Zyklen</th><th>Zykluszeit</th><th>Dauer</th><th>Ausstoß</th></tr></thead><tbody>
-    {% for step in plan.steps %}<tr><td>{{ "P" ~ step.tier if step.tier is not none }} · {{ step.name }}</td><td>{{ step.name }}</td><td>{{ step.cycles }}</td><td>{{ (step.seconds / step.cycles)|duration if step.cycles else "—" }}</td><td>{{ step.seconds|duration }}</td><td>{{ step.quantity }}</td></tr>{% else %}<tr><td colspan="6" class="muted">Keine Produktionsschritte gefunden.</td></tr>{% endfor %}
-  </tbody></table></div></section>
-  <section class="panel" style="margin-top:1rem"><h2>Einkauf / Rohstoffe</h2><div class="table-wrap"><table><thead><tr><th>Material</th><th>Stufe</th><th>Bedarf</th>{% for location in result.locations %}<th>{{ location.location.name }} · Stk.</th><th>{{ location.location.name }} · Kosten</th>{% endfor %}</tr></thead><tbody>
-    {% for item in plan.materials %}<tr><td>{{ item.name }}</td><td>{{ "P" ~ item.tier if item.tier is not none else "—" }}</td><td>{{ item.quantity }}</td>{% for location in result.locations %}{% set quote = location.quotes.get(item.type_id,{}) %}<td>{{ quote.lowest_sell|isk if quote.lowest_sell is not none else "—" }}</td><td>{{ (quote.lowest_sell * item.quantity)|isk if quote.lowest_sell is not none else "—" }}</td>{% endfor %}</tr>{% else %}<tr><td colspan="5" class="muted">Keine einzukaufenden Rohstoffe für diese Auswahl.</td></tr>{% endfor %}
-  </tbody></table></div><p class="hint">Schemata und Zyklen kommen aus dem Fuzzwork-SDE. Marktpreise stammen aus der ESI-API; Rohstoffe ohne Marktpreis werden nicht als 0 ISK bewertet.</p></section>
+
+  <section class="panel" style="margin-top:1rem">
+    <h2>Profitabilitätsanalyse</h2>
+    {% if best %}
+    <div class="notice" style="border-color:var(--accent,#3ddc97)">
+      <div class="eyebrow">Bester Verkaufsstandort</div>
+      <strong style="font-size:1.4rem">Verkaufen in {{ best.location.name }}</strong>
+      <div>{{ plan.product }} · {{ plan.output_quantity }} Stk. · Gewinn <strong>{{ best.summary.margin|isk }} ISK</strong>{% if best.summary.margin_pct is not none %} ({{ "%.1f"|format(best.summary.margin_pct) }} %){% endif %}</div>
+    </div>
+    {% else %}<p class="notice">Für keinen Standort ist eine vollständige Marge berechenbar.</p>{% endif %}
+    <div class="table-wrap" style="margin-top:1rem"><table><thead><tr><th>Standort</th><th>Einkaufskosten</th><th>Produktwert (Verkauf)</th><th>Marge</th><th>Marge %</th></tr></thead><tbody>
+      {% for location in result.locations %}{% set sm = location.summary %}<tr {% if best and location is sameas best %}style="background:rgba(61,220,151,.1)"{% endif %}>
+        <td>{{ location.location.name }}{% if best and location is sameas best %} ★{% endif %}</td>
+        <td>{{ sm.cost|isk if sm.cost is not none else "Unvollständig" }}{% if sm.cost is not none %} ISK{% endif %}</td>
+        <td>{{ sm.product_value|isk if sm.product_value is not none else "Kein Marktpreis" }}{% if sm.product_value is not none %} ISK{% endif %}</td>
+        <td>{{ sm.margin|isk if sm.margin is not none else "Nicht berechenbar" }}{% if sm.margin is not none %} ISK{% endif %}</td>
+        <td>{{ "%.1f %%"|format(sm.margin_pct) if sm.margin_pct is not none else "—" }}</td>
+      </tr>{% if sm.missing_prices %}<tr><td colspan="5" class="hint">Kein Verkaufspreis verfügbar für: {{ sm.missing_prices|join(", ") }}.</td></tr>{% endif %}{% endfor %}
+    </tbody></table></div>
+    {% if analysis.cheapest_total is not none %}<p class="hint">Günstigster Gesamteinkauf bei freier Standortwahl je Rohstoff: {{ analysis.cheapest_total|isk }} ISK</p>{% endif %}
+  </section>
+
+  <section class="panel" style="margin-top:1rem">
+    <h2>Aufschlüsselung nach Stufe</h2>
+    <div class="table-wrap"><table><thead><tr><th>Stufe</th><th>Positionen</th><th>Menge</th><th>Einkauf (günstigste Standorte)</th><th>Produktionsdauer</th></tr></thead><tbody>
+      {% for tier in analysis.tiers %}<tr><td>{{ "P" ~ tier.tier if tier.tier is not none else "?" }}</td><td>{{ tier.items }}</td><td>{{ tier.quantity }}</td><td>{{ tier.buy_cost|isk if tier.buy_cost else "—" }}{% if tier.buy_cost and not tier.complete %} (unvollständig){% endif %}</td><td>{{ tier.seconds|duration if tier.seconds else "—" }}</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+
+  <section class="panel" style="margin-top:1rem">
+    <h2>Einzelne Item-Analyse</h2>
+    <div class="table-wrap"><table><thead><tr><th>Item</th><th>Stufe</th><th>Bedarf</th><th>Aktion</th>{% for location in result.locations %}<th>{{ location.location.name }}</th>{% endfor %}<th>Günstigster</th><th>Spanne</th></tr></thead><tbody>
+      {% for row in analysis["items"] %}<tr>
+        <td>{% for _ in range(row.depth) %}↳ {% endfor %}{{ row.name }}</td><td>{{ "P" ~ row.tier if row.tier is not none else "—" }}</td><td>{{ row.quantity }}</td>
+        <td>{% if row.kind == "Herstellen" %}{{ row.cycles }} Zyklen · {{ row.seconds|duration }}{% else %}Kaufen{% endif %}</td>
+        {% for price in row.prices %}<td {% if row.cheapest and price.location.id == row.cheapest.location.id %}style="color:#3ddc97;font-weight:600"{% endif %}>{{ price.price|isk if price.price is not none else "—" }}</td>{% endfor %}
+        <td>{{ row.cheapest.location.name if row.cheapest else "—" }}</td><td>{{ "%.1f %%"|format(row.spread_pct) if row.spread_pct is not none else "—" }}</td>
+      </tr>{% endfor %}
+    </tbody></table></div>
+    <p class="hint">Schemata und Zyklen kommen aus dem Fuzzwork-SDE. Marktpreise (niedrigster Verkaufspreis je Standort) stammen aus der ESI-API; fehlende Preise werden nicht als 0 ISK bewertet.</p>
+  </section>
 {% endif %}
 {% endblock %}
