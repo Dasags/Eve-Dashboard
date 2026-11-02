@@ -145,61 +145,32 @@
     ctx.setTransform(dpr,0,0,dpr,0,0);
     if(data)layoutAndDraw();
   }
-  function graphLayout(nodes,edges,width,height){
+  function mapLayout(nodes,width,height){
     if(!nodes.length)return new Map();
-    const margin=65,spanX=Math.max(...nodes.map(n=>n.x))-Math.min(...nodes.map(n=>n.x))||1;
-    const spanY=Math.max(...nodes.map(n=>n.y))-Math.min(...nodes.map(n=>n.y))||1;
-    const minX=Math.min(...nodes.map(n=>n.x)),minY=Math.min(...nodes.map(n=>n.y));
-    const fit=Math.min((width-2*margin)/spanX,(height-2*margin)/spanY);
-    const points=nodes.map((node,index)=>({
+    const margin=65;
+    const minX=Math.min(...nodes.map(node=>node.x)),maxX=Math.max(...nodes.map(node=>node.x));
+    const minY=Math.min(...nodes.map(node=>node.y)),maxY=Math.max(...nodes.map(node=>node.y));
+    const spanX=maxX-minX||1,spanY=maxY-minY||1;
+    const fit=Math.max(0,Math.min((width-2*margin)/spanX,(height-2*margin)/spanY));
+    const mapWidth=spanX*fit,mapHeight=spanY*fit;
+    const offsetX=(width-mapWidth)/2,offsetY=(height-mapHeight)/2;
+    return new Map(nodes.map(node=>[node.id,{
       node,
-      x:margin+(node.x-minX)*fit+(index%3)*.07,
-      y:height-margin-(node.y-minY)*fit+Math.floor(index%5)*.05
-    }));
-    const positions=new Map(points.map(p=>[p.node.id,p]));
-    const links=edges.map(([a,b])=>[positions.get(a),positions.get(b)]).filter(([a,b])=>a&&b&&a!==b);
-    const k=Math.sqrt(width*height/nodes.length)*.75;
-    let temperature=Math.min(width,height)*.12;
-    for(let iteration=0;iteration<65;iteration++){
-      for(const point of points){point.dx=0;point.dy=0;}
-      for(let i=0;i<points.length;i++){
-        for(let j=i+1;j<points.length;j++){
-          const a=points[i],b=points[j],dx=a.x-b.x,dy=a.y-b.y;
-          const distance=Math.max(1,Math.hypot(dx,dy)),force=(k*k)/distance;
-          const fx=dx/distance*force,fy=dy/distance*force;
-          a.dx+=fx;a.dy+=fy;b.dx-=fx;b.dy-=fy;
-        }
-      }
-      for(const [a,b] of links){
-        const dx=a.x-b.x,dy=a.y-b.y,distance=Math.max(1,Math.hypot(dx,dy));
-        const force=(distance*distance)/k,fx=dx/distance*force,fy=dy/distance*force;
-        a.dx-=fx;a.dy-=fy;b.dx+=fx;b.dy+=fy;
-      }
-      const gravity=.012;
-      for(const point of points){
-        point.dx+=(width/2-point.x)*gravity;point.dy+=(height/2-point.y)*gravity;
-        const move=Math.max(1,Math.hypot(point.dx,point.dy));
-        point.x=Math.max(margin,Math.min(width-margin,point.x+point.dx/move*Math.min(move,temperature)));
-        point.y=Math.max(margin,Math.min(height-margin,point.y+point.dy/move*Math.min(move,temperature)));
-      }
-      temperature*=.94;
-    }
-    return positions;
+      x:offsetX+(node.x-minX)*fit,
+      y:height-offsetY-(node.y-minY)*fit
+    }]));
   }
   function prepareNodes(){
     const width=canvas.clientWidth,height=canvas.clientHeight;
     const regional=Boolean(selectedRegion);
     if(regional){
       visibleNodes=data.systems.filter(s=>s.region===selectedRegion);
-      const ids=new Set(visibleNodes.map(s=>s.id));
-      const edges=data.connections.filter(([a,b])=>ids.has(a)&&ids.has(b));
-      nodeById=graphLayout(visibleNodes,edges,width,height);
+      nodeById=mapLayout(visibleNodes,width,height);
     }else{
       visibleNodes=data.region_centers.map(r=>({
         ...r,id:r.region_id,name:r.name,region:r.name,security:r.security,is_region:true
       }));
-      const edges=[...data.connectionsByRegion.values()].map(edge=>[edge.a,edge.b]);
-      nodeById=graphLayout(visibleNodes,edges,width,height);
+      nodeById=mapLayout(visibleNodes,width,height);
     }
   }
   function pointFor(id){
