@@ -144,7 +144,7 @@ class PlanetaryCalculationTests(unittest.TestCase):
             },
         }
 
-        plan = create_planetary(100, 4, 1, recipes, types, groups)
+        plan = create_planetary(100, 4, 0, recipes, types, groups)
         self.assertEqual(plan["output_quantity"], 6)
         self.assertEqual(plan["sequential_seconds"], 300)
         self.assertEqual(plan["materials"][0]["quantity"], 6)
