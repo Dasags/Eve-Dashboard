@@ -120,6 +120,11 @@ async def refresh_token(character_id: int) -> dict:
     return renewed
 
 
+_GET_CACHE: dict[tuple, tuple[float, dict | list]] = {}
+_PUBLIC_TTL = 600
+_CHARACTER_TTL = 60
+
+
 class ESIClient:
     def __init__(self, character_id: int | None = None):
         self.character_id = character_id
@@ -175,7 +180,21 @@ class ESIClient:
         return response
 
     async def get(self, path: str, **kwargs) -> dict | list:
-        return (await self.request("GET", path, **kwargs)).json()
+        params = kwargs.get("params")
+        key = (
+            self.character_id,
+            path,
+            tuple(sorted(params.items())) if isinstance(params, dict) else None,
+        )
+        hit = _GET_CACHE.get(key)
+        if hit and hit[0] > time.monotonic():
+            return hit[1]
+        data = (await self.request("GET", path, **kwargs)).json()
+        ttl = _PUBLIC_TTL if self.character_id is None else _CHARACTER_TTL
+        if len(_GET_CACHE) > 2000:
+            _GET_CACHE.clear()
+        _GET_CACHE[key] = (time.monotonic() + ttl, data)
+        return data
 
     async def post(self, path: str, **kwargs) -> dict | list:
         return (await self.request("POST", path, **kwargs)).json()
