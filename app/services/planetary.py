@@ -3,12 +3,15 @@ from collections import defaultdict
 
 from app.services.sde import as_int, field
 
-_TIER_BY_GROUP = {
-    "planetary resources": 0,
-    "basic commodities": 1,
-    "advanced commodities": 2,
-    "specialized commodities": 3,
-    "advanced industry": 4,
+PLANET_RESOURCES = {
+    "Barren": ["Aqueous Liquids", "Base Metals", "Carbon Compounds", "Micro Organisms", "Noble Metals"],
+    "Gas": ["Aqueous Liquids", "Base Metals", "Ionic Solutions", "Noble Gas", "Reactive Gas"],
+    "Ice": ["Aqueous Liquids", "Heavy Metals", "Micro Organisms", "Noble Gas", "Planktic Colonies"],
+    "Lava": ["Base Metals", "Felsic Magma", "Heavy Metals", "Non-CS Crystals", "Suspended Plasma"],
+    "Oceanic": ["Aqueous Liquids", "Carbon Compounds", "Complex Organisms", "Micro Organisms", "Planktic Colonies"],
+    "Plasma": ["Base Metals", "Heavy Metals", "Noble Metals", "Non-CS Crystals", "Suspended Plasma"],
+    "Storm": ["Aqueous Liquids", "Base Metals", "Ionic Solutions", "Noble Gas", "Suspended Plasma"],
+    "Temperate": ["Aqueous Liquids", "Autotrophs", "Carbon Compounds", "Complex Organisms", "Micro Organisms"],
 }
 
 
@@ -30,12 +33,26 @@ def create_plan(
     sequential_seconds = 0
     visiting: set[int] = set()
 
+    tier_cache: dict[int, int] = {}
+
+    def structural_tier(type_id: int, trail: frozenset = frozenset()) -> int:
+        if type_id in tier_cache:
+            return tier_cache[type_id]
+        recipe = recipes.get(type_id)
+        if recipe is None or type_id in trail or not recipe["materials"]:
+            return 0
+        tier = 1 + max(
+            structural_tier(item["type_id"], trail | {type_id})
+            for item in recipe["materials"]
+        )
+        tier_cache[type_id] = tier
+        return tier
+
     def item_info(type_id: int) -> tuple[str, int | None, str]:
         row = types.get(type_id, {})
         name = field(row, "typeName", "type_name", default=f"Item {type_id}")
         group_name = group_names.get(as_int(row, "groupID"), "")
-        tier = _TIER_BY_GROUP.get(group_name.casefold())
-        return name, tier, group_name
+        return name, structural_tier(type_id), group_name
 
     def expand(type_id: int, needed: int, depth: int, is_root: bool = False) -> int:
         nonlocal sequential_seconds
@@ -154,7 +171,7 @@ def add_location_prices(plan: dict, quotes: dict[int, dict]) -> dict:
     }
 
 
-def analyze(plan: dict, locations: list[dict]) -> dict:
+def analyze(plan: dict, locations: list[dict], recipes: dict, raw_plan: dict) -> dict:
     """Aggregate per-station results into best-station, tier and item views."""
     for entry in locations:
         summary = entry["summary"]
@@ -188,9 +205,9 @@ def analyze(plan: dict, locations: list[dict]) -> dict:
     for item in items:
         group = tiers.setdefault(
             item["tier"],
-            {"tier": item["tier"], "items": 0, "quantity": 0, "buy_cost": 0.0, "complete": True, "seconds": 0},
+            {"tier": item["tier"], "count": 0, "quantity": 0, "buy_cost": 0.0, "complete": True, "seconds": 0},
         )
-        group["items"] += 1
+        group["count"] += 1
         group["quantity"] += item["quantity"]
         group["seconds"] += item["seconds"]
         if item["kind"] == "Kaufen":
@@ -199,7 +216,84 @@ def analyze(plan: dict, locations: list[dict]) -> dict:
             else:
                 group["complete"] = False
     tier_rows = sorted(tiers.values(), key=lambda row: (row["tier"] is None, row["tier"] or 0))
+    basis = (best or (locations[0] if locations else {"quotes": {}}))["quotes"]
+
+    def unit_price(type_id: int) -> float | None:
+        return basis.get(type_id, {}).get("lowest_sell")
+
+    merged: dict[int, dict] = {}
+    for row in plan["tree"]:
+        current = merged.setdefault(row["type_id"], {**row, "quantity": 0, "cycles": 0})
+        current["quantity"] += row["quantity"]
+        current["cycles"] += row["cycles"]
+    tier_groups: dict[int, list[dict]] = {}
+    for row in merged.values():
+        price = unit_price(row["type_id"])
+        sell = price * row["quantity"] if price is not None else None
+        cost = None
+        if row["kind"] == "Herstellen":
+            parts = [
+                (unit_price(m["type_id"]), m["quantity"] * row["cycles"])
+                for m in recipes[row["type_id"]]["materials"]
+            ]
+            if all(unit is not None for unit, _ in parts):
+                cost = sum(unit * qty for unit, qty in parts)
+        profit = sell - cost if sell is not None and cost is not None else None
+        tier_groups.setdefault(row["tier"] if row["tier"] is not None else -1, []).append(
+            {
+                "name": row["name"],
+                "kind": row["kind"],
+                "quantity": row["quantity"],
+                "cycles": row["cycles"],
+                "seconds": row["seconds"],
+                "sell": sell,
+                "cost": cost,
+                "profit": profit,
+                "margin": profit / cost * 100 if profit is not None and cost else None,
+            }
+        )
+    groups = [
+        {"tier": tier, "rows": sorted(rows, key=lambda r: r["name"])}
+        for tier, rows in sorted(tier_groups.items(), reverse=True)
+    ]
+
+    needs = {
+        item["name"]: item["quantity"]
+        for item in raw_plan["materials"]
+        if item["tier"] == 0
+    }
+    lookup = {name.casefold(): name for name in needs}
+    coverage = {
+        planet: [lookup[res.casefold()] for res in resources if res.casefold() in lookup]
+        for planet, resources in PLANET_RESOURCES.items()
+    }
+    ranking = sorted(
+        ({"planet": p, "covers": c} for p, c in coverage.items() if c),
+        key=lambda row: (-len(row["covers"]), row["planet"]),
+    )
+    remaining, setup = set(needs), []
+    while remaining:
+        pick = max(coverage, key=lambda p: (len(remaining & set(coverage[p])), p))
+        gained = sorted(remaining & set(coverage[pick]))
+        if not gained:
+            break
+        setup.append({"planet": pick, "resources": gained})
+        remaining -= set(gained)
+    planets = {
+        "needs": [
+            {
+                "name": name,
+                "quantity": qty,
+                "planets": [p for p, c in coverage.items() if name in c],
+            }
+            for name, qty in sorted(needs.items())
+        ],
+        "ranking": ranking,
+        "setup": setup,
+    }
     return {
+        "tier_groups": groups,
+        "planets": planets,
         "best": best,
         "best_ids": best_ids,
         "items": items,

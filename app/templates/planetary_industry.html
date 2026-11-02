@@ -54,10 +54,38 @@
   </section>
 
   <section class="panel" style="margin-top:1rem">
-    <h2>Aufschlüsselung nach Stufe</h2>
-    <div class="table-wrap"><table><thead><tr><th>Stufe</th><th>Positionen</th><th>Menge</th><th>Einkauf (günstigste Standorte)</th><th>Produktionsdauer</th></tr></thead><tbody>
-      {% for tier in analysis.tiers %}<tr><td>{{ "P" ~ tier.tier if tier.tier is not none else "?" }}</td><td>{{ tier.items }}</td><td>{{ tier.quantity }}</td><td>{{ tier.buy_cost|isk if tier.buy_cost else "—" }}{% if tier.buy_cost and not tier.complete %} (unvollständig){% endif %}</td><td>{{ tier.seconds|duration if tier.seconds else "—" }}</td></tr>{% endfor %}
+    <h2>Was ist zu produzieren? (nach Stufe)</h2>
+    <p class="hint">Preisbasis: {{ best.location.name if best else "erster gewählter Standort" }}. Marge = Gewinn auf Einsatzkosten der Eingangsmaterialien.</p>
+    {% for group in analysis.tier_groups %}
+    <h3>{{ "P" ~ group.tier if group.tier >= 0 else "Stufe unbekannt" }} · {{ group.rows|length }} Item{{ "s" if group.rows|length != 1 }}</h3>
+    <div class="table-wrap"><table><thead><tr><th>Item</th><th>Aktion</th><th>Menge</th><th>Zyklen</th><th>Dauer</th><th>Verkaufswert</th><th>Einsatzkosten</th><th>Gewinn</th><th>Marge</th></tr></thead><tbody>
+      {% for r in group.rows %}<tr>
+        <td>{{ r.name }}</td><td>{{ "Herstellen" if r.kind == "Herstellen" else "Kaufen" }}</td><td>{{ r.quantity }}</td>
+        <td>{{ r.cycles if r.cycles else "—" }}</td><td>{{ r.seconds|duration if r.seconds else "—" }}</td>
+        <td>{{ r.sell|isk if r.sell is not none else "—" }}</td><td>{{ r.cost|isk if r.cost is not none else "—" }}</td>
+        <td style="color:{{ '#3ddc97' if r.profit is not none and r.profit >= 0 else '#ff6b7a' }}">{{ r.profit|isk if r.profit is not none else "—" }}</td>
+        <td>{{ "%.1f %%"|format(r.margin) if r.margin is not none else "—" }}</td>
+      </tr>{% endfor %}
     </tbody></table></div>
+    {% endfor %}
+  </section>
+
+  {% set pl = analysis.planets %}
+  <section class="panel" style="margin-top:1rem">
+    <h2>Geeignete Planeten</h2>
+    <p class="hint">Rohstoffe (P0) für die komplette Kette ab Planet. Zuordnung nach Planetentyp.</p>
+    <div class="table-wrap"><table><thead><tr><th>Rohstoff (P0)</th><th>Bedarf</th><th>Planetentypen</th></tr></thead><tbody>
+      {% for n in pl.needs %}<tr><td>{{ n.name }}</td><td>{{ n.quantity }}</td><td>{{ n.planets|join(", ") }}</td></tr>{% endfor %}
+    </tbody></table></div>
+    <h3>Empfohlenes Setup (wenigste Planetentypen)</h3>
+    <div class="table-wrap"><table><thead><tr><th>Planetentyp</th><th>Dort abbauen</th></tr></thead><tbody>
+      {% for s in pl.setup %}<tr><td><strong>{{ s.planet }}</strong></td><td>{{ s.resources|join(", ") }}</td></tr>{% endfor %}
+    </tbody></table></div>
+    <h3>Planetentypen nach Abdeckung</h3>
+    <div class="table-wrap"><table><thead><tr><th>Planetentyp</th><th>Abdeckung</th><th>Liefert</th></tr></thead><tbody>
+      {% for r in pl.ranking %}<tr><td>{{ r.planet }}</td><td>{{ r.covers|length }} / {{ pl.needs|length }}</td><td>{{ r.covers|join(", ") }}</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="hint">Planetentyp-Zuordnung aus Spielwissen (unverifiziert gegen die SDE). Produktionsketten über mehrere Planeten brauchen Transport oder Customs-Office-Handel zwischen den Planeten.</p>
   </section>
 
   <section class="panel" style="margin-top:1rem">

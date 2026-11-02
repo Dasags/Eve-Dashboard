@@ -1297,6 +1297,9 @@ async def calculate_planetary_industry(
             types,
             group_names,
         )
+        raw_plan = create_planetary_plan(
+            product_id, quantity, 0, recipes, types, group_names
+        )
         type_ids = {item["type_id"] for item in plan["tree"]}
         type_ids.add(product_id)
         semaphore = asyncio.Semaphore(8)
@@ -1335,7 +1338,7 @@ async def calculate_planetary_industry(
         result={
             "plan": plan,
             "locations": location_results,
-            "analysis": analyze_planetary(plan, location_results),
+            "analysis": analyze_planetary(plan, location_results, recipes, raw_plan),
         },
         form_data=form_data,
         error=None,
