@@ -40,8 +40,11 @@ class MapDataTests(unittest.TestCase):
 
         self.assertEqual(len(result["systems"]), 2)
         self.assertEqual(result["systems"][0]["security"], 0.9)
+        self.assertEqual(result["systems"][1]["x"], 12.0)
         self.assertEqual(result["systems"][0]["y"], 20.0)
         self.assertEqual(result["region_centers"][0]["region_id"], 10000001)
+        self.assertEqual(result["region_centers"][0]["x"], 11.0)
+        self.assertEqual(result["region_centers"][0]["y"], 21.0)
         self.assertEqual(result["connections"], [[30000001, 30000002]])
 
 
