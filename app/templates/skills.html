@@ -2,6 +2,17 @@
 {% block title %}Skills – {{ app_name }}{% endblock %}
 {% block content %}
 <div class="eyebrow">Char-Dashboard · Skills</div><h1>Skills – {{ active_character.name if active_character else "Charakter" }}</h1>
+{% if characters|length > 1 %}
+<form method="post" action="/auth/chars/select" class="toolbar" style="margin-bottom:1rem">
+  <input type="hidden" name="next" value="/skills">
+  <label style="display:flex;align-items:center;gap:.6rem">Charakter
+    <select name="character_id" onchange="this.form.submit()">
+      {% for character in characters %}<option value="{{ character.id }}" {% if active_character and active_character.id == character.id %}selected{% endif %}>{{ character.name }}{% if character.is_main %} (Main){% endif %}</option>{% endfor %}
+    </select>
+  </label>
+  <noscript><button>Wechseln</button></noscript>
+</form>
+{% endif %}
 {% if needs_scopes %}
   <section class="panel"><h2>ESI-Berechtigungen fehlen</h2><p class="muted">Für Skillübersicht und Warteschlange müssen die Scopes `esi-skills.read_skills.v1` und `esi-skills.read_skillqueue.v1` freigegeben sein.</p><a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
 {% else %}
