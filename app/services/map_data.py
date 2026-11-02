@@ -74,6 +74,7 @@ async def _download() -> dict:
         "regions": sorted({row["region"] for row in system_rows}),
         "region_centers": [
             {
+                "region_id": region_id,
                 "name": region_names.get(region_id, str(region_id)),
                 "x": sum(system["x"] for system in items) / len(items),
                 "y": sum(system["y"] for system in items) / len(items),
@@ -96,6 +97,9 @@ async def get_map_data() -> dict:
             if all(
                 isinstance(system.get("security"), (int, float))
                 for system in cached.get("systems", [])
+            ) and all(
+                isinstance(region.get("region_id"), int)
+                for region in cached.get("region_centers", [])
             ):
                 _cached = cached
                 _cached_at = time.monotonic()
@@ -105,8 +109,14 @@ async def get_map_data() -> dict:
         except (httpx.HTTPError, KeyError, TypeError, ValueError):
             if _CACHE.exists():
                 _cached = json.loads(_CACHE.read_text(encoding="utf-8"))
+                region_ids = {
+                    system["region"]: system["region_id"]
+                    for system in _cached.get("systems", [])
+                }
                 for system in _cached.get("systems", []):
                     system.setdefault("security", None)
+                for region in _cached.get("region_centers", []):
+                    region.setdefault("region_id", region_ids.get(region["name"]))
                 _cached_at = time.monotonic()
                 return _cached
             raise
