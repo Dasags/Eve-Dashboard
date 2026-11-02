@@ -2,6 +2,17 @@
 {% block title %}Wallet-Verteilung – {{ app_name }}{% endblock %}
 {% block content %}
 <div class="eyebrow">Char-Dashboard · Wallet</div><h1>Wallet-Verteilung – {{ active_character.name if active_character else "Charakter" }}</h1>
+{% if characters|length > 1 %}
+<form method="post" action="/auth/chars/select" class="toolbar" style="margin-bottom:1rem">
+  <input type="hidden" name="next" value="/wallet/distribution">
+  <label style="display:flex;align-items:center;gap:.6rem">Charakter
+    <select name="character_id" onchange="this.form.submit()">
+      {% for character in characters %}<option value="{{ character.id }}" {% if active_character and active_character.id == character.id %}selected{% endif %}>{{ character.name }}{% if character.is_main %} (Main){% endif %}</option>{% endfor %}
+    </select>
+  </label>
+  <noscript><button>Wechseln</button></noscript>
+</form>
+{% endif %}
 {% if needs_scopes %}
 <section class="panel"><p>Für den Wallet-Saldo fehlt `esi-wallet.read_character_wallet.v1`.</p><a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
 {% else %}

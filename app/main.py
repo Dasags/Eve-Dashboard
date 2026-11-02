@@ -72,10 +72,23 @@ templates.env.filters["duration"] = format_duration
 
 async def resolve_names(esi: ESIClient, ids: set[int]) -> dict[int, str]:
     result: dict[int, str] = {}
-    values = sorted(ids)
-    for offset in range(0, len(values), 500):
-        response = await esi.post("/universe/names/", json=values[offset : offset + 500])
+
+    async def resolve(chunk: list[int]) -> None:
+        try:
+            response = await esi.post("/universe/names/", json=chunk)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code not in {400, 404}:
+                raise
+            if len(chunk) > 1:
+                middle = len(chunk) // 2
+                await resolve(chunk[:middle])
+                await resolve(chunk[middle:])
+            return
         result.update({item["id"]: item["name"] for item in response})
+
+    values = sorted(item for item in ids if isinstance(item, int) and item > 0)
+    for offset in range(0, len(values), 500):
+        await resolve(values[offset : offset + 500])
     return result
 
 
@@ -249,12 +262,15 @@ def characters_page(request: Request):
 
 
 @app.post("/auth/chars/select")
-def select_character(request: Request, character_id: int = Form(...)):
+def select_character(
+    request: Request, character_id: int = Form(...), next: str = Form("/dashboard")
+):
     account_id, _ = require_account(request)
     if not storage.character_belongs_to(character_id, account_id):
         raise HTTPException(404, "Charakter gehört nicht zu diesem Konto.")
     request.session["character_id"] = character_id
-    return RedirectResponse("/dashboard", status_code=303)
+    target = next if next in {"/wallet", "/wallet/distribution", "/skills"} else "/dashboard"
+    return RedirectResponse(target, status_code=303)
 
 
 @app.post("/auth/chars/remove")
