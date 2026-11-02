@@ -13,6 +13,13 @@ _CACHE = DATA_DIR / "cache" / "eve-map.json"
 _TTL_SECONDS = 24 * 60 * 60
 _cached_at = 0.0
 _cached: dict | None = None
+_VERSION = 2
+# Wurmloch-, Abyssal- und Jove-Regionen liegen weit außerhalb von New Eden
+_EXCLUDED_REGIONS = {10000004, 10000017, 10000019}
+
+
+def _is_known_space(region_id: int) -> bool:
+    return 10000000 <= region_id < 11000000 and region_id not in _EXCLUDED_REGIONS
 _lock = asyncio.Lock()
 
 
@@ -37,6 +44,8 @@ async def _download() -> dict:
     for row in systems:
         try:
             region_id = int(row["regionID"])
+            if not _is_known_space(region_id):
+                continue
             system_rows.append(
                 {
                     "id": int(row["solarSystemID"]),
@@ -69,6 +78,7 @@ async def _download() -> dict:
     for row in system_rows:
         grouped.setdefault(row["region_id"], []).append(row)
     return {
+        "version": _VERSION,
         "systems": system_rows,
         "connections": [list(edge) for edge in sorted(edges)],
         "regions": sorted({row["region"] for row in system_rows}),
@@ -94,7 +104,7 @@ async def get_map_data() -> dict:
             return _cached
         if _CACHE.exists() and time.time() - _CACHE.stat().st_mtime < _TTL_SECONDS:
             cached = json.loads(_CACHE.read_text(encoding="utf-8"))
-            if all(
+            if cached.get("version") == _VERSION and all(
                 isinstance(system.get("security"), (int, float))
                 for system in cached.get("systems", [])
             ) and all(

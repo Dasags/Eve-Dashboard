@@ -2,9 +2,10 @@
 {% block title %}Sternenkarte – {{ app_name }}{% endblock %}
 {% block head %}
 <style>
-  body.space-page header,body.space-page footer { display:none; }
+  body.space-page footer { display:none; }
+  body.space-page header { position:relative; z-index:20; margin:0; width:100%; padding-inline:1rem; background:rgb(6 10 18 / 96%); border-bottom:1px solid #1f2b3d; }
   body.space-page main { width:100%; padding:0; }
-  .galaxy { position:fixed; inset:0; overflow:hidden; background:#030611; color:#dce7f7; }
+  .galaxy { position:fixed; top:var(--nav-h,66px); right:0; bottom:0; left:0; overflow:hidden; background:#030611; color:#dce7f7; }
   .galaxy::before,.galaxy::after { content:""; position:absolute; inset:-20%; pointer-events:none; }
   .galaxy::before { opacity:.63; background:radial-gradient(ellipse at 48% 48%,transparent 6%,rgb(26 39 114 / 18%) 22%,transparent 36%),radial-gradient(ellipse at 51% 47%,transparent 20%,rgb(115 33 131 / 18%) 34%,transparent 50%),radial-gradient(ellipse at 57% 51%,rgb(29 86 177 / 20%) 0,transparent 31%),radial-gradient(ellipse at 41% 53%,rgb(95 35 135 / 15%) 0,transparent 34%); filter:blur(35px); transform:rotate(-18deg) scale(1.1); }
   .galaxy::after { opacity:.48; background-image:radial-gradient(1px 1px at 6% 13%,#fff 98%,transparent),radial-gradient(1px 1px at 19% 73%,#d7e8ff 98%,transparent),radial-gradient(1.5px 1.5px at 33% 28%,#fff 98%,transparent),radial-gradient(1px 1px at 48% 81%,#c2d7ff 98%,transparent),radial-gradient(1px 1px at 63% 11%,#fff 98%,transparent),radial-gradient(1.5px 1.5px at 78% 62%,#dce8ff 98%,transparent),radial-gradient(1px 1px at 91% 31%,#fff 98%,transparent); background-size:311px 257px,379px 331px,463px 389px,541px 433px,617px 499px,733px 563px,839px 617px; }
@@ -16,6 +17,7 @@
   .map-top-tools { display:flex; align-items:center; gap:4px; min-width:0; }
   .map-top input,.map-top select { width:auto; min-width:125px; min-height:30px; height:30px; padding:4px 8px; border-radius:3px; font-size:.75rem; background:#10141e; }
   .map-top #map-search { width:205px; }
+  .map-top input[type=checkbox] { width:15px; min-width:0; height:15px; min-height:0; padding:0; }
   .map-top button { min-height:30px; height:30px; padding:3px 10px; border-radius:3px; font-size:.75rem; background:#171b26; }
   .map-top button.active { border-color:#397e94; color:#72d7e8; background:#122935; }
   .map-live { display:flex; align-items:center; gap:5px; padding:0 10px; color:#91a5bd; font-size:.72rem; white-space:nowrap; }
@@ -26,7 +28,7 @@
   .map-rail button { min-height:49px; display:grid; align-content:center; gap:3px; padding:4px 2px; border:0; border-radius:2px; background:transparent; color:#9ca8b7; font-size:.66rem; }
   .map-rail button span { color:#d6e0ed; font-size:1rem; }
   .map-rail button:hover,.map-rail button.active { background:#151c27; color:#64c8dc; }
-  .map-sidebox { position:absolute; z-index:2; top:53px; right:10px; width:250px; max-height:calc(100vh - 70px); overflow:auto; padding:.85rem; border:1px solid #28303e; background:rgb(8 11 18 / 91%); box-shadow:0 5px 22px #0008; }
+  .map-sidebox { position:absolute; z-index:2; top:53px; right:10px; width:250px; max-height:calc(100% - 70px); overflow:auto; padding:.85rem; border:1px solid #28303e; background:rgb(8 11 18 / 91%); box-shadow:0 5px 22px #0008; }
   .map-sidebox h2 { margin:.25rem 0 .65rem; font-size:.95rem; }
   .map-sidebox .eyebrow { font-size:.67rem; }
   .map-info { min-height:90px; margin-bottom:.55rem; }
@@ -52,7 +54,7 @@
 </style>
 {% endblock %}
 {% block content %}
-<div class="galaxy">
+<div class="galaxy" id="galaxy">
   <div class="map-top">
     <div class="map-brand"><span>✦</span>EVE WORLD · MAP</div>
     <div class="map-top-tools">
@@ -61,7 +63,7 @@
       <select id="map-region" aria-label="Region"><option value="">Ganz New Eden</option></select>
       <button id="map-reset" type="button">Zurücksetzen</button>
       <button id="map-global" class="active" type="button">New Eden</button>
-      <label style="display:flex;align-items:center;gap:4px;color:#aab8ca;font-size:.72rem"><input id="map-live" type="checkbox" checked style="width:13px;min-height:13px"> LIVE</label>
+      <label style="display:flex;align-items:center;gap:4px;color:#aab8ca;font-size:.72rem"><input id="map-live" type="checkbox" checked> LIVE</label>
       <select id="map-filter" aria-label="Kartenfilter">
         <option value="all">Alle Systeme</option><option value="kills">Killmails</option>
         <option value="incursions">Incursions</option><option value="high">Highsec</option>
@@ -172,6 +174,17 @@
         ...r,id:r.region_id,name:r.name,region:r.name,is_region:true
       }));
       nodeById=mapLayout([...visibleNodes,...regionLabels],width,height);
+      regionRadius=new Map();
+      for(const region of data.region_centers){
+        const center=nodeById.get(region.region_id);if(!center)continue;
+        let total=0,count=0;
+        for(const system of data.systems){
+          if(system.region_id!==region.region_id)continue;
+          const p=nodeById.get(system.id);if(!p)continue;
+          total+=Math.hypot(p.x-center.x,p.y-center.y);count++;
+        }
+        regionRadius.set(region.region_id,count?Math.max(14,total/count*2):0);
+      }
     }
   }
   function pointFor(id){
@@ -184,6 +197,7 @@
     const width=canvas.clientWidth,height=canvas.clientHeight;
     ctx.clearRect(0,0,width,height);
     ctx.fillStyle="#030611";ctx.fillRect(0,0,width,height);
+    drawRegionGlow();
     for(const [x,y,r,color] of [
       [.52,.45,.72,"rgba(39,60,177,.20)"],[.38,.54,.56,"rgba(99,31,132,.18)"],
       [.67,.43,.48,"rgba(23,104,181,.16)"],[.50,.62,.34,"rgba(125,40,151,.12)"]
@@ -207,13 +221,13 @@
     if(filter==="incursions")return incursionSystems.has(node.id);
     return true;
   }
-  let killCountsByRegion=new Map(),incursionsByRegion=new Map();
+  let killCountsByRegion=new Map(),incursionsByRegion=new Map(),regionRadius=new Map();
   function drawNode(node,point){
     const global=!selectedRegion;
     const killCount=killCounts.get(node.id)||0;
     const incursion=incursionSystems.has(node.id);
     const base=colorMode==="region"?regionColor(node.region):colorForSecurity(node.security);
-    const radius=global?Math.min(5,1.2+Math.log2(killCount+1)*1.1):Math.min(7,3+Math.log2(killCount+1));
+    const radius=global?Math.min(6,1.1+Math.log2(killCount+1)*1.1):Math.min(7,3+Math.log2(killCount+1));
     if(selected&&selected.id===node.id){
       ctx.beginPath();ctx.arc(point.x,point.y,radius+8,0,Math.PI*2);ctx.strokeStyle="rgba(104,218,237,.85)";ctx.lineWidth=1.5;ctx.stroke();
     }
@@ -222,7 +236,8 @@
     }
     ctx.beginPath();
     if(global){
-      ctx.arc(point.x,point.y,radius,0,Math.PI*2);
+      ctx.arc(point.x,point.y,radius+1.8,0,Math.PI*2);ctx.fillStyle="rgba(120,170,255,.08)";ctx.fill();
+      ctx.beginPath();ctx.arc(point.x,point.y,radius,0,Math.PI*2);
       ctx.fillStyle=killCount&&showKills?"#e54f76":incursion?"#b881f2":base;ctx.fill();
       if(killCount||incursion){ctx.strokeStyle=killCount?"#ff9baf":"#dfc4ff";ctx.lineWidth=1;ctx.stroke();}
     }else{
@@ -264,15 +279,29 @@
     }
     ctx.shadowBlur=0;
   }
+  function drawRegionGlow(){
+    if(selectedRegion||!data||!regionRadius.size)return;
+    for(const region of data.region_centers){
+      const point=pointFor(region.region_id),radius=(regionRadius.get(region.region_id)||0)*scale*1.25;
+      if(!point||radius<8)continue;
+      const hue=regionHue(region.name);
+      const g=ctx.createRadialGradient(point.x,point.y,0,point.x,point.y,radius);
+      g.addColorStop(0,`hsla(${hue},70%,55%,.16)`);g.addColorStop(.6,`hsla(${hue},70%,45%,.06)`);g.addColorStop(1,"transparent");
+      ctx.fillStyle=g;ctx.fillRect(point.x-radius,point.y-radius,radius*2,radius*2);
+    }
+  }
   function drawRegionLabels(){
     if(selectedRegion||!showLabels||scale>1.7)return;
-    ctx.textAlign="center";ctx.font="600 10px system-ui";
+    ctx.textAlign="center";ctx.font="700 11px system-ui";
+    if("letterSpacing" in ctx)ctx.letterSpacing="2px";
+    ctx.shadowColor="#02040a";ctx.shadowBlur=6;
     for(const region of data.region_centers){
       const point=pointFor(region.region_id);if(!point)continue;
-      ctx.fillStyle="rgba(202,211,226,.7)";ctx.shadowColor="#05060c";ctx.shadowBlur=5;
+      ctx.fillStyle=`hsla(${regionHue(region.name)},60%,82%,.82)`;
       ctx.fillText(region.name.toUpperCase(),point.x,point.y);
     }
     ctx.shadowBlur=0;
+    if("letterSpacing" in ctx)ctx.letterSpacing="0px";
   }
   function draw(){
     if(!data||!visibleNodes.length)return;
@@ -280,14 +309,15 @@
     const isGlobal=!selectedRegion;
     const validIds=new Set(visibleNodes.filter(allowedNode).map(n=>n.id));
     if(showJumps){
-      ctx.beginPath();ctx.strokeStyle="rgba(157,171,193,.25)";ctx.lineWidth=.85;
-      const edges=data.connections;
-      for(const [a,b] of edges){
+      const inner=new Path2D(),cross=new Path2D();
+      for(const [a,b] of data.connections){
         if(!validIds.has(a)||!validIds.has(b))continue;
         const p=pointFor(a),q=pointFor(b);if(!p||!q)continue;
-        ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);
+        const path=systemById.get(a)?.region_id===systemById.get(b)?.region_id?inner:cross;
+        path.moveTo(p.x,p.y);path.lineTo(q.x,q.y);
       }
-      ctx.stroke();
+      ctx.lineWidth=.7;ctx.strokeStyle="rgba(120,150,200,.22)";ctx.stroke(inner);
+      ctx.lineWidth=1;ctx.strokeStyle="rgba(150,190,255,.38)";ctx.stroke(cross);
     }
     if(route.length>1){
       ctx.beginPath();ctx.strokeStyle="#5ce4c5";ctx.lineWidth=3;
@@ -313,10 +343,11 @@
       :`${count.toLocaleString("de-DE")} Systeme · ${data.connections.filter(([a,b])=>nodeById.has(a)&&nodeById.has(b)).length.toLocaleString("de-DE")} Sprünge`;
   }
   function layoutAndDraw(){prepareNodes();draw();}
-  function regionColor(name){
+  function regionHue(name){
     let hash=0;for(const char of name)hash=(hash*31+char.charCodeAt(0))|0;
-    return `hsl(${Math.abs(hash)%360} 58% 58%)`;
+    return Math.abs(hash)%360;
   }
+  function regionColor(name){return `hsl(${regionHue(name)} 58% 58%)`;}
   function updateDetails(node){
     selected=node;
     if(!node){systemName.textContent=selectedRegion||"New Eden";systemDetails.textContent="Klicke auf ein System oder suche nach einem Namen.";draw();return;}
@@ -364,6 +395,10 @@
     updateDetails(node);
   }
   function prepareData(raw){
+    const known=id=>id>=10000000&&id<11000000&&![10000004,10000017,10000019].includes(id);
+    raw.systems=raw.systems.filter(s=>known(s.region_id));
+    raw.region_centers=raw.region_centers.filter(r=>known(r.region_id));
+    raw.regions=[...new Set(raw.systems.map(s=>s.region))].sort();
     data=raw;systemById=new Map(data.systems.map(s=>[s.id,s]));
     for(const system of data.systems)systemLookup.set(system.name.toLowerCase(),system);
     const centers=new Map(data.region_centers.map(r=>[
@@ -548,6 +583,9 @@
   });
   canvas.addEventListener("pointercancel",()=>{drag=null;canvas.classList.remove("dragging");});
   canvas.addEventListener("wheel",event=>{event.preventDefault();const rect=canvas.getBoundingClientRect();zoom(event.deltaY<0?1.12:1/1.12,event.clientX-rect.left,event.clientY-rect.top);},{passive:false});
+  const header=document.querySelector("header"),galaxy=document.getElementById("galaxy");
+  const syncNav=()=>{galaxy.style.setProperty("--nav-h",`${header.offsetHeight}px`);};
+  syncNav();window.addEventListener("resize",syncNav);
   new ResizeObserver(resize).observe(canvas);
   loadMap();
   liveTimer=setInterval(()=>{if(document.getElementById("map-live").checked)loadOverlay();},60000);
