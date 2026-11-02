@@ -27,7 +27,7 @@ from app.services.market import resolve_type_ids
 from app.services.market import adjusted_prices as get_adjusted_prices
 from app.services.invention import DECRYPTORS, apply_invention, plan_invention
 from app.services.production import apply_market_and_stock, create_plan, skill_time_factor
-from app.services.planetary import add_location_prices, create_plan as create_planetary_plan
+from app.services.planetary import add_location_prices, analyze as analyze_planetary, create_plan as create_planetary_plan
 from app.services.sde import field, invention_recipes, manufacturing_recipes, planetary_recipes, type_catalog
 
 APP_NAME = os.getenv("APP_NAME", "EVE-World")
@@ -1332,7 +1332,11 @@ async def calculate_planetary_industry(
     return render(
         request,
         "planetary_industry.html",
-        result={"plan": plan, "locations": location_results},
+        result={
+            "plan": plan,
+            "locations": location_results,
+            "analysis": analyze_planetary(plan, location_results),
+        },
         form_data=form_data,
         error=None,
         locations=locations,
