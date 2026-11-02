@@ -34,7 +34,7 @@
       </div>
       <div class="toolbar" style="margin-top:1rem"><label>Region<select id="map-region"><option value="">Ganz New Eden</option></select></label></div>
       <div id="map-status" class="muted" style="height:{{ map_height }}px;display:grid;place-items:center">Kartendaten werden geladen …</div>
-      <svg id="eve-map" role="img" aria-label="Karte der EVE-Online-Sternensysteme" viewBox="0 0 900 520" style="display:none;width:{{ map_width }}%;height:{{ map_height }}px;background:#0a111c;border:1px solid #253348;border-radius:.6rem"></svg>
+      <svg id="eve-map" role="img" aria-label="Karte der EVE-Online-Sternensysteme. Ziehen zum Verschieben, Mausrad zum Zoomen." viewBox="0 0 900 520" style="display:none;width:{{ map_width }}%;height:{{ map_height }}px;background:#0a111c;border:1px solid #253348;border-radius:.6rem;touch-action:none;cursor:grab"></svg>
     </div>
     <div class="panel">
       <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center">
@@ -66,35 +66,69 @@ const clockDE = new Intl.DateTimeFormat("de-DE", {timeZone:"Europe/Berlin",hour:
 function tickClocks(){const now=new Date();document.getElementById("utc-clock").textContent=clockUTC.format(now);document.getElementById("local-clock").textContent=clockDE.format(now);}
 tickClocks();setInterval(tickClocks,1000);
 const svg=document.getElementById("eve-map"),mapStatus=document.getElementById("map-status");
-let mapScale=1,mapData=null,selectedRegion="";
+let mapScale=1,mapData=null,selectedRegion="",panX=0,panY=0,drag=null;
 function escapeXML(value){return String(value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[char]));}
 function drawMap(){
   if(!mapData)return;
   const visibleSystems=selectedRegion?mapData.systems.filter(s=>s.region===selectedRegion):mapData.systems;
-  if(!visibleSystems.length)return;
+  if(!visibleSystems.length){svg.style.display="none";mapStatus.textContent="Für diese Region sind keine Systeme verfügbar.";mapStatus.style.display="grid";return;}
+  const width=Math.max(300,Math.round(svg.getBoundingClientRect().width));
+  const height=Math.max(250,Math.round(svg.getBoundingClientRect().height));
+  svg.setAttribute("viewBox",`0 0 ${width} ${height}`);
   const minX=Math.min(...visibleSystems.map(s=>s.x)),maxX=Math.max(...visibleSystems.map(s=>s.x));
-  const minY=Math.min(...visibleSystems.map(s=>s.y)),maxY=Math.max(...visibleSystems.map(s=>s.y)),pad=35;
-  const sx=(900-2*pad)/(maxX-minX||1), sy=(520-2*pad)/(maxY-minY||1), scale=Math.min(sx,sy)*mapScale;
-  const ox=(900-(maxX-minX)*scale)/2, oy=(520-(maxY-minY)*scale)/2;
-  const points=new Map(visibleSystems.map(s=>[s.id,{x:ox+(s.x-minX)*scale,y:520-oy-(s.y-minY)*scale,s}]));
+  const minY=Math.min(...visibleSystems.map(s=>s.y)),maxY=Math.max(...visibleSystems.map(s=>s.y)),pad=28;
+  const dataScale=Math.min((width-2*pad)/(maxX-minX||1),(height-2*pad)/(maxY-minY||1));
+  const contentWidth=(maxX-minX)*dataScale,contentHeight=(maxY-minY)*dataScale;
+  const ox=(width-contentWidth)/2,oy=(height-contentHeight)/2;
+  const points=new Map(visibleSystems.map(s=>[s.id,{x:ox+(s.x-minX)*dataScale,y:height-oy-(s.y-minY)*dataScale,s}]));
   const edges=mapData.connections.map(c=>{const a=points.get(c[0]),b=points.get(c[1]);return a&&b?`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#243d59" stroke-width="1"/>`:''}).join('');
-  const dots=[...points.values()].map(({x,y,s})=>`<circle cx="${x}" cy="${y}" r="2.5" fill="#63a9f5"><title>${s.name} · ${s.region}</title></circle>`).join('');
-  const labels=mapData.region_centers.filter(r=>!selectedRegion||r.name===selectedRegion).map(r=>{
+  const dots=[...points.values()].map(({x,y,s})=>`<circle cx="${x}" cy="${y}" r="2.4" fill="#63a9f5"><title>${escapeXML(s.name)} · ${escapeXML(s.region)}</title></circle>`).join('');
+  const labels=mapData.region_centers.filter(r=>selectedRegion&&r.name===selectedRegion).map(r=>{
     const regionSystems=visibleSystems.filter(s=>s.region===r.name);if(!regionSystems.length)return "";
     const x=regionSystems.reduce((a,s)=>a+points.get(s.id).x,0)/regionSystems.length;
     const y=regionSystems.reduce((a,s)=>a+points.get(s.id).y,0)/regionSystems.length;
-    return `<text x="${x}" y="${y-12}" fill="#8298b4" text-anchor="middle" font-size="12">${escapeXML(r.name)}</text>`;
+    return `<text x="${x}" y="${y-12}" fill="#8298b4" text-anchor="middle" font-size="${selectedRegion?12:9}">${escapeXML(r.name)}</text>`;
   }).join('');
-  svg.innerHTML=`<g>${edges}${dots}${labels}</g>`;svg.style.display="block";mapStatus.style.display="none";
+  const transform=`translate(${width/2+panX} ${height/2+panY}) scale(${mapScale}) translate(${-width/2} ${-height/2})`;
+  svg.innerHTML=`<g transform="${transform}">${edges}${dots}${labels}</g>`;svg.style.display="block";mapStatus.style.display="none";
 }
 fetch("/api/map").then(r=>{if(!r.ok)throw Error();return r.json()}).then(data=>{
   mapData=data;const select=document.getElementById("map-region");
   for(const name of data.regions){const option=document.createElement("option");option.value=name;option.textContent=name;select.append(option);}
-  select.onchange=()=>{selectedRegion=select.value;mapScale=1;drawMap();};drawMap();
+  select.onchange=()=>{selectedRegion=select.value;mapScale=1;panX=0;panY=0;drawMap();};drawMap();
 }).catch(()=>{mapStatus.textContent="Die Sternenkarte ist nicht verfügbar. Kartendaten aus Fuzzwork konnten nicht geladen werden."});
-document.getElementById("zoom-in").onclick=()=>{mapScale=Math.min(3,mapScale*1.25);drawMap()};
-document.getElementById("zoom-out").onclick=()=>{mapScale=Math.max(.5,mapScale/1.25);drawMap()};
-document.getElementById("map-reset").onclick=()=>{mapScale=1;drawMap()};
+function zoomMap(factor,x,y){
+  const rect=svg.getBoundingClientRect(),centerX=rect.width/2,centerY=rect.height/2;
+  const pointerX=x??centerX,pointerY=y??centerY,nextScale=Math.min(12,Math.max(.5,mapScale*factor));
+  const ratio=nextScale/mapScale;
+  panX=pointerX-centerX-(pointerX-centerX-panX)*ratio;
+  panY=pointerY-centerY-(pointerY-centerY-panY)*ratio;
+  mapScale=nextScale;drawMap();
+}
+document.getElementById("zoom-in").onclick=()=>zoomMap(1.25);
+document.getElementById("zoom-out").onclick=()=>zoomMap(1/1.25);
+document.getElementById("map-reset").onclick=()=>{mapScale=1;panX=0;panY=0;drawMap()};
+svg.addEventListener("pointerdown",event=>{
+  if(event.button!==0)return;
+  drag={x:event.clientX,y:event.clientY,panX,panY};
+  svg.setPointerCapture(event.pointerId);svg.style.cursor="grabbing";
+});
+svg.addEventListener("pointermove",event=>{
+  if(!drag)return;
+  const rect=svg.getBoundingClientRect();
+  panX=drag.panX+(event.clientX-drag.x)*rect.width/(svg.clientWidth||rect.width);
+  panY=drag.panY+(event.clientY-drag.y)*rect.height/(svg.clientHeight||rect.height);
+  drawMap();
+});
+function stopMapDrag(){drag=null;svg.style.cursor="grab";}
+svg.addEventListener("pointerup",stopMapDrag);
+svg.addEventListener("pointercancel",stopMapDrag);
+svg.addEventListener("wheel",event=>{
+  event.preventDefault();
+  const rect=svg.getBoundingClientRect();
+  zoomMap(event.deltaY<0?1.15:1/1.15,event.clientX-rect.left,event.clientY-rect.top);
+},{passive:false});
+new ResizeObserver(()=>drawMap()).observe(svg);
 async function loadKills(){
   const regions=document.getElementById("kill-regions").value;
   const status=document.getElementById("kill-status"),rows=document.getElementById("kill-rows");
