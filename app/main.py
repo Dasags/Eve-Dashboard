@@ -203,7 +203,7 @@ async def index(request: Request):
             ],
             limit=int(storage.get_setting("killfeed_count", "15")),
         )
-    except (httpx.HTTPError, ValueError):
+    except (httpx.HTTPError, ValueError, asyncio.TimeoutError):
         kills = []
         killfeed_error = "Killfeed momentan nicht erreichbar."
     characters = []

@@ -121,6 +121,12 @@ async def get_kills(regions: list[str] | None = None, limit: int = 15) -> list[d
         cached = _cache.get(key)
         if cached and time.time() - cached[0] < TTL:
             return cached[1][:limit]
-        result = await _fetch(list(requested_regions), limit)
+        try:
+            result = await asyncio.wait_for(_fetch(list(requested_regions), limit), timeout=8)
+        except (asyncio.TimeoutError, httpx.HTTPError):
+            if cached:
+                _cache[key] = (time.time() - TTL + 30, cached[1])
+                return cached[1][:limit]
+            raise
         _cache[key] = (time.time(), result)
         return result[:limit]
