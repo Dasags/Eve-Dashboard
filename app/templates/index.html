@@ -1,63 +1,102 @@
 {% extends "base.html" %}
 {% block title %}{{ app_name }} – Übersicht{% endblock %}
+{% block head %}
+<style>
+  .overview-layout { display:grid; grid-template-columns:minmax(290px,360px) minmax(0,1fr); gap:1rem; align-items:start; }
+  .overview-sidebar { display:grid; gap:1rem; min-width:0; }
+  .clock-panel { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
+  .clock-value { margin-top:.25rem; font-size:1.55rem; font-variant-numeric:tabular-nums; }
+  .pilot-list { display:grid; gap:.65rem; }
+  .pilot-card { padding:.85rem; border:1px solid #283951; border-radius:.7rem; background:linear-gradient(135deg,rgb(17 30 49 / 92%),rgb(9 17 30 / 92%)); }
+  .pilot-top { display:flex; align-items:center; gap:.7rem; }
+  .pilot-top img { width:42px; height:42px; border-radius:.55rem; background:#101a29; }
+  .pilot-data { display:grid; grid-template-columns:1fr 1fr; gap:.55rem; margin-top:.7rem; }
+  .pilot-data > div { min-width:0; padding:.45rem; border-radius:.45rem; background:rgb(4 10 18 / 52%); }
+  .pilot-data strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.84rem; }
+  .pilot-data small { display:block; margin-bottom:.2rem; color:#8095af; font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; }
+  .feed-panel { min-width:0; min-height:calc(100vh - 105px); }
+  .feed-head { display:flex; justify-content:space-between; align-items:center; gap:1rem; }
+  .feed-head .toolbar { margin:0; }
+  .feed-table { max-height:calc(100vh - 235px); }
+  @media(max-width:850px) { .overview-layout { grid-template-columns:1fr; } .feed-panel { min-height:0; } .feed-table { max-height:none; } }
+</style>
+{% endblock %}
 {% block content %}
-<section class="grid two" style="align-items:start">
-  <div>
-    <div class="eyebrow">New Eden · Dashboard</div>
-    <h1>New Eden im Überblick.</h1>
-    <p class="muted">Persönliches, modular aufgebautes Dashboard für EVE Online. Karte und Killfeed sind der Anfang; Charakterdaten und weitere ESI-Module folgen nach Anmeldung.</p>
-    <div class="panel" style="display:flex;gap:2rem;flex-wrap:wrap">
-      <div><span class="eyebrow">EVE-Zeit (UTC)</span><div id="utc-clock" style="font-size:1.6rem;font-variant-numeric:tabular-nums">--:--:--</div></div>
-      <div><span class="eyebrow">Deutsche Zeit</span><div id="local-clock" style="font-size:1.6rem;font-variant-numeric:tabular-nums">--:--:--</div></div>
-    </div>
-  </div>
-  <div class="panel">
+<div class="overview-layout">
+  <aside class="overview-sidebar">
+    <section class="panel clock-panel">
+      <div><span class="eyebrow">EVE-Zeit · UTC</span><div id="utc-clock" class="clock-value">--:--:--</div></div>
+      <div><span class="eyebrow">Lokal · Berlin</span><div id="local-clock" class="clock-value">--:--:--</div></div>
+    </section>
     {% if active_character %}
-      <div class="eyebrow">Angemeldet</div>
-      <h2>{{ active_character.name }}</h2>
-      <a class="button primary" href="/dashboard">Char-Dashboard öffnen</a>
+    <section class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-bottom:.75rem">
+        <div><div class="eyebrow">Deine Charaktere</div><h2 style="margin:.25rem 0 0">Piloten</h2></div>
+        <a class="button" href="/auth/chars">Verwalten</a>
+      </div>
+      <div class="pilot-list">
+        {% for pilot in overview_characters %}
+        <article class="pilot-card">
+          <div class="pilot-top">
+            <img src="https://images.evetech.net/characters/{{ pilot.id }}/portrait?size=64" alt="" loading="lazy">
+            <div style="min-width:0;flex:1">
+              <strong>{{ pilot.name }}</strong>
+              <div class="hint" style="font-size:.77rem">{{ "Main" if pilot.is_main else "Alt" }}{% if pilot.id == active_character.id %} · aktiv{% endif %}</div>
+            </div>
+            {% if pilot.id != active_character.id %}
+            <form method="post" action="/auth/chars/select">
+              <input type="hidden" name="character_id" value="{{ pilot.id }}"><input type="hidden" name="next" value="/">
+              <button type="submit" aria-label="{{ pilot.name }} auswählen">↗</button>
+            </form>
+            {% endif %}
+          </div>
+          <div class="pilot-data">
+            <div><small>Wallet</small><strong>{% if pilot.wallet_balance is not none %}{{ pilot.wallet_balance|isk }} ISK{% else %}{{ pilot.wallet_status }}{% endif %}</strong></div>
+            <div><small>Aktueller Skill</small><strong>{% if pilot.current_skill %}{{ pilot.current_skill }}{% else %}{{ pilot.skill_status }}{% endif %}</strong></div>
+            <div style="grid-column:1/-1"><small>Corporation</small><strong>{% if pilot.corporation %}{{ pilot.corporation.name }} [{{ pilot.corporation.ticker }}]{% else %}{{ pilot.profile_status or "Nicht verfügbar" }}{% endif %}</strong></div>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+      <p class="hint" style="margin-bottom:0;font-size:.75rem">Kontostand und Skill setzen die passenden ESI-Scopes voraus.</p>
+    </section>
     {% else %}
-      <div class="eyebrow">EVE Online SSO</div>
-      <h2>Dein Charakter, deine Übersicht.</h2>
-      <p class="muted">Melde dich sicher über EVE Online an. Für private Daten werden nur die angeforderten ESI-Berechtigungen genutzt.</p>
+    <section class="panel">
+      <div class="eyebrow">EVE Online SSO</div><h2 style="margin:.35rem 0">New Eden im Überblick</h2>
+      <p class="muted">Melde dich über EVE Online an, um Kontostand, Skillqueue und Corporation deiner Charaktere zu sehen.</p>
       <a class="button primary" href="/auth/login">Mit EVE anmelden</a>
+    </section>
     {% endif %}
-  </div>
-</section>
+    <a class="panel" href="/map" style="display:block">
+      <div class="eyebrow">New Eden</div><strong>Interaktive Sternenkarte öffnen →</strong>
+      <div class="hint" style="font-size:.82rem;margin-top:.25rem">Regionen, Sicherheit und aktuelle Killmails</div>
+    </a>
+  </aside>
 
-<section style="margin-top:1.5rem">
-  <div class="grid two" style="align-items:start">
-    <div class="panel">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem">
-        <div><div class="eyebrow">New Eden</div><h2 style="margin:.3rem 0 0">Sternenkarte</h2></div>
-        <div class="toolbar" style="margin:0"><button id="zoom-out" type="button" aria-label="Karte verkleinern">−</button><button id="zoom-in" type="button" aria-label="Karte vergrößern">+</button><button id="map-reset" type="button">Reset</button></div>
-      </div>
-      <div class="toolbar" style="margin-top:1rem"><label>Region<select id="map-region"><option value="">Ganz New Eden</option></select></label></div>
-      <div id="map-status" class="muted" style="height:{{ map_height }}px;display:grid;place-items:center">Kartendaten werden geladen …</div>
-      <svg id="eve-map" role="img" aria-label="Karte der EVE-Online-Sternensysteme. Ziehen zum Verschieben, Mausrad zum Zoomen." viewBox="0 0 900 520" style="display:none;width:{{ map_width }}%;height:{{ map_height }}px;background:#0a111c;border:1px solid #253348;border-radius:.6rem;touch-action:none;cursor:grab"></svg>
+  <section class="panel feed-panel">
+    <div class="feed-head">
+      <div><div class="eyebrow">zKillboard · New Eden</div><h1 style="font-size:1.6rem;margin:.25rem 0">Killfeed</h1></div>
+      <div class="toolbar"><button id="refresh-kills" type="button">Aktualisieren</button></div>
     </div>
-    <div class="panel">
-      <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center">
-        <div><div class="eyebrow">zKillboard · ESI</div><h2 style="margin:.3rem 0 0">Killfeed</h2></div>
-        <button id="refresh-kills" type="button">Aktualisieren</button>
-      </div>
-      <div class="toolbar" style="margin-top:1rem">
-        <label style="flex:1">Regionen (Komma-getrennt)<input id="kill-regions" value="{{ regions|join(', ') }}" placeholder="z. B. The Forge, Delve"></label>
-      </div>
-      <div id="kill-status" class="muted" role="status" style="padding:.8rem 0">{{ killfeed_error or "Killfeed wird geladen …" }}</div>
-      <div class="table-wrap">
-        <table><thead><tr><th>Zeit (UTC)</th><th>System</th><th>Schiff</th><th>Opfer</th><th>Wert</th></tr></thead>
+    <div class="toolbar" style="margin-top:.75rem">
+      <label style="flex:1;min-width:220px">Regionen, komma-getrennt
+        <input id="kill-regions" value="{{ regions|join(', ') }}" placeholder="Leer lassen für ganz New Eden">
+      </label>
+    </div>
+    <div id="kill-status" class="muted" role="status" style="padding:.35rem 0  .8rem">{{ killfeed_error or "Killfeed bereit." }}</div>
+    <div class="table-wrap feed-table">
+      <table><thead><tr><th>Zeit UTC</th><th>System</th><th>Schiff</th><th>Opfer</th><th>Wert</th></tr></thead>
         <tbody id="kill-rows">
         {% for kill in kills %}
           <tr><td>{{ kill.time[11:19] }}</td><td>{{ kill.system }}</td><td>{{ kill.ship }}</td><td><a href="https://zkillboard.com/kill/{{ kill.id }}/" target="_blank" rel="noopener">{{ kill.victim }}</a></td><td>{{ "{:,.0f}".format(kill.value / 1000000) }} Mio ISK</td></tr>
         {% else %}
           <tr><td colspan="5" class="muted">Aktuell sind keine Kills verfügbar.</td></tr>
         {% endfor %}
-        </tbody></table>
-      </div>
+        </tbody>
+      </table>
     </div>
-  </div>
-</section>
+  </section>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -65,70 +104,6 @@ const clockUTC = new Intl.DateTimeFormat("de-DE", {timeZone:"UTC",hour:"2-digit"
 const clockDE = new Intl.DateTimeFormat("de-DE", {timeZone:"Europe/Berlin",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
 function tickClocks(){const now=new Date();document.getElementById("utc-clock").textContent=clockUTC.format(now);document.getElementById("local-clock").textContent=clockDE.format(now);}
 tickClocks();setInterval(tickClocks,1000);
-const svg=document.getElementById("eve-map"),mapStatus=document.getElementById("map-status");
-let mapScale=1,mapData=null,selectedRegion="",panX=0,panY=0,drag=null;
-function escapeXML(value){return String(value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[char]));}
-function drawMap(){
-  if(!mapData)return;
-  const visibleSystems=selectedRegion?mapData.systems.filter(s=>s.region===selectedRegion):mapData.systems;
-  if(!visibleSystems.length){svg.style.display="none";mapStatus.textContent="Für diese Region sind keine Systeme verfügbar.";mapStatus.style.display="grid";return;}
-  const width=Math.max(300,Math.round(svg.getBoundingClientRect().width));
-  const height=Math.max(250,Math.round(svg.getBoundingClientRect().height));
-  svg.setAttribute("viewBox",`0 0 ${width} ${height}`);
-  const minX=Math.min(...visibleSystems.map(s=>s.x)),maxX=Math.max(...visibleSystems.map(s=>s.x));
-  const minY=Math.min(...visibleSystems.map(s=>s.y)),maxY=Math.max(...visibleSystems.map(s=>s.y)),pad=28;
-  const dataScale=Math.min((width-2*pad)/(maxX-minX||1),(height-2*pad)/(maxY-minY||1));
-  const contentWidth=(maxX-minX)*dataScale,contentHeight=(maxY-minY)*dataScale;
-  const ox=(width-contentWidth)/2,oy=(height-contentHeight)/2;
-  const points=new Map(visibleSystems.map(s=>[s.id,{x:ox+(s.x-minX)*dataScale,y:height-oy-(s.y-minY)*dataScale,s}]));
-  const edges=mapData.connections.map(c=>{const a=points.get(c[0]),b=points.get(c[1]);return a&&b?`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#243d59" stroke-width="1"/>`:''}).join('');
-  const dots=[...points.values()].map(({x,y,s})=>`<circle cx="${x}" cy="${y}" r="2.4" fill="#63a9f5"><title>${escapeXML(s.name)} · ${escapeXML(s.region)}</title></circle>`).join('');
-  const labels=mapData.region_centers.filter(r=>selectedRegion&&r.name===selectedRegion).map(r=>{
-    const regionSystems=visibleSystems.filter(s=>s.region===r.name);if(!regionSystems.length)return "";
-    const x=regionSystems.reduce((a,s)=>a+points.get(s.id).x,0)/regionSystems.length;
-    const y=regionSystems.reduce((a,s)=>a+points.get(s.id).y,0)/regionSystems.length;
-    return `<text x="${x}" y="${y-12}" fill="#8298b4" text-anchor="middle" font-size="${selectedRegion?12:9}">${escapeXML(r.name)}</text>`;
-  }).join('');
-  const transform=`translate(${width/2+panX} ${height/2+panY}) scale(${mapScale}) translate(${-width/2} ${-height/2})`;
-  svg.innerHTML=`<g transform="${transform}">${edges}${dots}${labels}</g>`;svg.style.display="block";mapStatus.style.display="none";
-}
-fetch("/api/map").then(r=>{if(!r.ok)throw Error();return r.json()}).then(data=>{
-  mapData=data;const select=document.getElementById("map-region");
-  for(const name of data.regions){const option=document.createElement("option");option.value=name;option.textContent=name;select.append(option);}
-  select.onchange=()=>{selectedRegion=select.value;mapScale=1;panX=0;panY=0;drawMap();};drawMap();
-}).catch(()=>{mapStatus.textContent="Die Sternenkarte ist nicht verfügbar. Kartendaten aus Fuzzwork konnten nicht geladen werden."});
-function zoomMap(factor,x,y){
-  const rect=svg.getBoundingClientRect(),centerX=rect.width/2,centerY=rect.height/2;
-  const pointerX=x??centerX,pointerY=y??centerY,nextScale=Math.min(12,Math.max(.5,mapScale*factor));
-  const ratio=nextScale/mapScale;
-  panX=pointerX-centerX-(pointerX-centerX-panX)*ratio;
-  panY=pointerY-centerY-(pointerY-centerY-panY)*ratio;
-  mapScale=nextScale;drawMap();
-}
-document.getElementById("zoom-in").onclick=()=>zoomMap(1.25);
-document.getElementById("zoom-out").onclick=()=>zoomMap(1/1.25);
-document.getElementById("map-reset").onclick=()=>{mapScale=1;panX=0;panY=0;drawMap()};
-svg.addEventListener("pointerdown",event=>{
-  if(event.button!==0)return;
-  drag={x:event.clientX,y:event.clientY,panX,panY};
-  svg.setPointerCapture(event.pointerId);svg.style.cursor="grabbing";
-});
-svg.addEventListener("pointermove",event=>{
-  if(!drag)return;
-  const rect=svg.getBoundingClientRect();
-  panX=drag.panX+(event.clientX-drag.x)*rect.width/(svg.clientWidth||rect.width);
-  panY=drag.panY+(event.clientY-drag.y)*rect.height/(svg.clientHeight||rect.height);
-  drawMap();
-});
-function stopMapDrag(){drag=null;svg.style.cursor="grab";}
-svg.addEventListener("pointerup",stopMapDrag);
-svg.addEventListener("pointercancel",stopMapDrag);
-svg.addEventListener("wheel",event=>{
-  event.preventDefault();
-  const rect=svg.getBoundingClientRect();
-  zoomMap(event.deltaY<0?1.15:1/1.15,event.clientX-rect.left,event.clientY-rect.top);
-},{passive:false});
-new ResizeObserver(()=>drawMap()).observe(svg);
 async function loadKills(){
   const regions=document.getElementById("kill-regions").value;
   const status=document.getElementById("kill-status"),rows=document.getElementById("kill-rows");
@@ -136,8 +111,7 @@ async function loadKills(){
   try{
     const response=await fetch(`/api/kills?regions=${encodeURIComponent(regions)}`);
     if(!response.ok)throw Error();
-    const data=await response.json();
-    rows.replaceChildren();
+    const data=await response.json();rows.replaceChildren();
     if(!data.length){rows.innerHTML='<tr><td colspan="5" class="muted">Keine Kills für diese Auswahl verfügbar.</td></tr>';}
     else for(const kill of data){
       const tr=document.createElement("tr");

@@ -12,7 +12,7 @@ from urllib.parse import urlencode
 
 import httpx
 import jwt
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -206,15 +206,118 @@ async def index(request: Request):
     except (httpx.HTTPError, ValueError):
         kills = []
         killfeed_error = "Killfeed momentan nicht erreichbar."
+    characters = []
+    account_id = current_account(request)
+    if account_id is not None:
+        characters = await asyncio.gather(
+            *[overview_character(info) for info in storage.list_characters(account_id)]
+        )
+        skill_ids = {
+            entry["skill_id"]
+            for character in characters
+            for entry in character["queue"]
+            if entry.get("skill_id")
+        }
+        if skill_ids:
+            try:
+                async with ESIClient() as esi:
+                    skill_names = await resolve_names(esi, skill_ids)
+                for character in characters:
+                    if character["queue"]:
+                        character["current_skill"] = skill_names.get(
+                            character["queue"][0]["skill_id"],
+                            f"Skill {character['queue'][0]['skill_id']}",
+                        )
+            except httpx.HTTPError:
+                for character in characters:
+                    if character["queue"]:
+                        character["current_skill"] = (
+                            f"Skill {character['queue'][0]['skill_id']} (Name nicht verfügbar)"
+                        )
     return render(
         request,
         "index.html",
         kills=kills,
         killfeed_error=killfeed_error,
         regions=storage.get_setting("killfeed_regions").split(","),
-        map_height=int(storage.get_setting("map_height", "420")),
-        map_width=int(storage.get_setting("map_width", "100")),
+        overview_characters=characters,
     )
+
+
+async def overview_character(info: dict) -> dict:
+    character_id = info["id"]
+    profile = {
+        **info,
+        "corporation": None,
+        "wallet_balance": None,
+        "wallet_status": "Scope fehlt",
+        "queue": [],
+        "current_skill": None,
+        "skill_status": "Scope fehlt",
+        "profile_status": None,
+    }
+    try:
+        async with ESIClient() as esi:
+            character_data = await esi.get(f"/characters/{character_id}/")
+            corporation_id = character_data.get("corporation_id")
+            if corporation_id:
+                corporation = await esi.get(f"/corporations/{corporation_id}/")
+                profile["corporation"] = corporation
+    except httpx.HTTPError:
+        profile["profile_status"] = "Corporation über ESI nicht erreichbar"
+
+    wallet_scope = "esi-wallet.read_character_wallet.v1" in info["scopes"]
+    queue_scope = "esi-skills.read_skillqueue.v1" in info["scopes"]
+    if not wallet_scope and not queue_scope:
+        return profile
+    try:
+        async with ESIClient(character_id) as esi:
+            calls = []
+            if wallet_scope:
+                calls.append(("wallet", f"/characters/{character_id}/wallet/"))
+            if queue_scope:
+                calls.append(("queue", f"/characters/{character_id}/skillqueue/"))
+
+            async def scoped_get(path: str):
+                try:
+                    return await esi.get(path), None
+                except (httpx.HTTPError, PermissionError) as exc:
+                    return None, exc
+
+            values = await asyncio.gather(*(scoped_get(path) for _, path in calls))
+        for (name, _), (value, error) in zip(calls, values, strict=True):
+            if error:
+                if name == "wallet":
+                    profile["wallet_status"] = "Wallet momentan nicht erreichbar"
+                else:
+                    profile["skill_status"] = "Skillqueue momentan nicht erreichbar"
+                continue
+            if name == "wallet":
+                profile["wallet_balance"] = float(value)
+                profile["wallet_status"] = None
+            else:
+                profile["queue"] = value
+                profile["current_skill"] = (
+                    value[0].get("skill_id") if value else None
+                )
+                profile["skill_status"] = None if value else "Skillqueue pausiert"
+    except (httpx.HTTPError, PermissionError):
+        if (
+            wallet_scope
+            and profile["wallet_status"] != "Wallet momentan nicht erreichbar"
+        ):
+            profile["wallet_status"] = "Wallet momentan nicht erreichbar"
+        if (
+            queue_scope
+            and profile["skill_status"] != "Skillqueue momentan nicht erreichbar"
+        ):
+            profile["skill_status"] = "Skillqueue momentan nicht erreichbar"
+    return profile
+
+
+@app.get("/map")
+def map_page(request: Request):
+    return render(request, "map.html")
 
 
 @app.get("/auth/login")
@@ -290,7 +393,7 @@ def select_character(
     if not storage.character_belongs_to(character_id, account_id):
         raise HTTPException(404, "Charakter gehört nicht zu diesem Konto.")
     request.session["character_id"] = character_id
-    target = next if next in {"/wallet", "/wallet/distribution", "/skills"} else "/dashboard"
+    target = next if next in {"/", "/wallet", "/wallet/distribution", "/skills"} else "/dashboard"
     return RedirectResponse(target, status_code=303)
 
 
@@ -1624,7 +1727,10 @@ def remove_location(request: Request, location_pk: int):
 
 
 @app.get("/api/kills")
-async def kills(regions: str | None = None):
+async def kills(
+    regions: str | None = None,
+    limit: int | None = Query(None, ge=5, le=50),
+):
     selected_regions = (
         [value.strip() for value in regions.split(",") if value.strip()]
         if regions is not None
@@ -1637,7 +1743,7 @@ async def kills(regions: str | None = None):
     try:
         return await get_kills(
             regions=selected_regions,
-            limit=int(storage.get_setting("killfeed_count", "15")),
+            limit=limit or int(storage.get_setting("killfeed_count", "15")),
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

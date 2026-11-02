@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% block title %}Sternenkarte – {{ app_name }}{% endblock %}
+{% block head %}
+<style>
+  .map-workspace { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:.85rem; min-height:calc(100vh - 130px); }
+  .map-stage { position:relative; height:calc(100vh - 130px); min-height:520px; overflow:hidden; border:1px solid #263a55; border-radius:.9rem; background:radial-gradient(ellipse at 50% 48%,#101b2c 0,#070d18 72%); box-shadow:0 12px 45px rgb(0 0 0 / 35%); }
+  #eve-map { display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
+  #eve-map.dragging { cursor:grabbing; }
+  .map-toolbar { position:absolute; z-index:2; top:.85rem; left:.85rem; right:.85rem; display:flex; flex-wrap:wrap; align-items:end; gap:.55rem; padding:.7rem; border:1px solid rgb(70 96 128 / 50%); border-radius:.7rem; background:rgb(5 11 20 / 88%); backdrop-filter:blur(8px); }
+  .map-toolbar label { min-width:145px; flex:1; font-size:.75rem; }
+  .map-toolbar input,.map-toolbar select { min-height:2.2rem; }
+  .map-actions { display:flex; gap:.35rem; }
+  .map-count { margin-left:auto; color:#91a6c1; font-size:.78rem; }
+  .map-help { position:absolute; bottom:.75rem; left:.85rem; padding:.4rem .65rem; border-radius:.45rem; background:rgb(5 11 20 / 78%); color:#91a6c1; font-size:.75rem; pointer-events:none; }
+  .map-side { display:grid; grid-template-rows:auto 1fr auto; gap:.75rem; min-width:0; }
+  .map-info { min-height:150px; }
+  .map-legend { display:grid; gap:.55rem; }
+  .legend-row { display:flex; align-items:center; gap:.55rem; color:#aab8ca; font-size:.84rem; }
+  .legend-dot { width:.65rem; height:.65rem; border-radius:50%; box-shadow:0 0 10px currentColor; }
+  .map-status { color:#91a6c1; font-size:.84rem; line-height:1.5; }
+  @media(max-width:900px) { .map-workspace { grid-template-columns:1fr; } .map-stage { height:70vh; min-height:460px; } .map-side { grid-template-columns:1fr 1fr; grid-template-rows:auto; } .map-status { grid-column:1/-1; } }
+  @media(max-width:600px) { .map-side { grid-template-columns:1fr; } .map-toolbar { top:.45rem; left:.45rem; right:.45rem; gap:.4rem; } .map-toolbar label { min-width:calc(50% - .5rem); } .map-count { width:100%; margin-left:0; } .map-help { bottom:.4rem; left:.45rem; } }
+</style>
+{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:end;gap:1rem;margin-bottom:.75rem">
+  <div><div class="eyebrow">New Eden · Interaktive Karte</div><h1 style="margin:.2rem 0 0;font-size:1.7rem">Sternenkarte</h1></div>
+  <a id="dotlan-reference" href="https://evemaps.dotlan.net/" target="_blank" rel="noopener" class="hint" style="font-size:.8rem">DOTLAN-Referenz ↗</a>
+</div>
+<div class="map-workspace">
+  <section class="map-stage" aria-label="Interaktive Karte des EVE-Universums">
+    <div class="map-toolbar">
+      <label>Region<select id="map-region"><option value="">Ganz New Eden</option></select></label>
+      <label>Kartenfilter<select id="map-filter">
+        <option value="all">Alle Systeme</option>
+        <option value="kills">Aktuelle Killmails</option>
+        <option value="incursions">Incursions</option>
+        <option value="high">Highsec</option>
+        <option value="low">Lowsec</option>
+        <option value="null">Nullsec / Wormholes</option>
+      </select></label>
+      <label>System suchen<input id="map-search" list="system-list" placeholder="Systemname …" autocomplete="off"><datalist id="system-list"></datalist></label>
+      <div class="map-actions">
+        <button id="map-zoom-out" type="button" aria-label="Verkleinern">−</button>
+        <button id="map-zoom-in" type="button" aria-label="Vergrößern">+</button>
+        <button id="map-reset" type="button">Reset</button>
+      </div>
+      <span id="map-count" class="map-count">Kartendaten werden geladen …</span>
+    </div>
+    <canvas id="eve-map" aria-label="Sternensysteme. Ziehen zum Verschieben, Mausrad zum Zoomen."></canvas>
+    <div class="map-help">Ziehen: verschieben · Mausrad: zoomen · System anklicken: Details</div>
+  </section>
+  <aside class="map-side">
+    <section class="panel map-info">
+      <div class="eyebrow">System-Details</div>
+      <h2 id="system-name" style="margin:.3rem 0">System auswählen</h2>
+      <div id="system-details" class="map-status">Klicke auf einen Stern oder suche oben nach einem System.</div>
+    </section>
+    <section class="panel">
+      <div class="eyebrow">Legende</div><h2 style="margin:.3rem 0 .8rem">Sicherheit</h2>
+      <div class="map-legend">
+        <div class="legend-row"><span class="legend-dot" style="color:#67d8ff;background:#67d8ff"></span>Highsec · 0,5 bis 1,0</div>
+        <div class="legend-row"><span class="legend-dot" style="color:#ffd166;background:#ffd166"></span>Lowsec · 0,1 bis 0,4</div>
+        <div class="legend-row"><span class="legend-dot" style="color:#ff658a;background:#ff658a"></span>Nullsec / Wormholes</div>
+        <div class="legend-row"><span class="legend-dot" style="color:#ff9d55;background:#ff9d55"></span>Killmails in jüngstem Feed</div>
+        <div class="legend-row"><span class="legend-dot" style="color:#c28aff;background:#c28aff"></span>Aktuelle Incursion</div>
+      </div>
+    </section>
+    <div id="map-status" class="panel map-status" role="status">Die Karte wird aus EVE-System- und Sprungdaten geladen.</div>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const canvas=document.getElementById("eve-map"),ctx=canvas.getContext("2d");
+  const regionSelect=document.getElementById("map-region"),filterSelect=document.getElementById("map-filter");
+  const status=document.getElementById("map-status"),countLabel=document.getElementById("map-count");
+  let data=null,region="",filter="all",scale=1,panX=0,panY=0,drag=null,selected=null;
+  let killsBySystem=new Map(),incursionSystems=new Set(),basePoints=new Map(),visibleSystems=[];
+  const dpr=()=>Math.max(1,window.devicePixelRatio||1);
+  const colorForSecurity=value=>!Number.isFinite(value)?"#9fb0c5":value>=.5?"#67d8ff":value>=.1?"#ffd166":"#ff658a";
+  function resize(){
+    const rect=canvas.getBoundingClientRect(),ratio=dpr();
+    canvas.width=Math.max(1,Math.round(rect.width*ratio));canvas.height=Math.max(1,Math.round(rect.height*ratio));
+    ctx.setTransform(ratio,0,0,ratio,0,0);
+    if(data)setView();
+  }
+  function setView(){
+    visibleSystems=region?data.systems.filter(s=>s.region===region):data.systems;
+    if(!visibleSystems.length)return;
+    const xs=visibleSystems.map(s=>s.x),ys=visibleSystems.map(s=>s.y);
+    const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+    const width=canvas.clientWidth,height=canvas.clientHeight,pad=54;
+    const fit=Math.min((width-2*pad)/(maxX-minX||1),(height-2*pad)/(maxY-minY||1));
+    const mapWidth=(maxX-minX)*fit,mapHeight=(maxY-minY)*fit,ox=(width-mapWidth)/2,oy=(height-mapHeight)/2;
+    basePoints=new Map(visibleSystems.map(s=>[s.id,{x:ox+(s.x-minX)*fit,y:height-oy-(s.y-minY)*fit,system:s}]));
+    scale=1;panX=0;panY=0;draw();
+  }
+  function screenPoint(point){
+    const w=canvas.clientWidth,h=canvas.clientHeight;
+    return {x:w/2+(point.x-w/2)*scale+panX,y:h/2+(point.y-h/2)*scale+panY};
+  }
+  function draw(){
+    if(!data)return;
+    const width=canvas.clientWidth,height=canvas.clientHeight;
+    ctx.clearRect(0,0,width,height);
+    const bg=ctx.createRadialGradient(width*.52,height*.48,5,width*.52,height*.48,Math.max(width,height)*.8);
+    bg.addColorStop(0,"#101a2b");bg.addColorStop(1,"#050a13");ctx.fillStyle=bg;ctx.fillRect(0,0,width,height);
+    let seed=8731;for(let i=0;i<190;i++){seed=(seed*16807)%2147483647;const x=(seed%10000)/10000*width;seed=(seed*16807)%2147483647;const y=(seed%10000)/10000*height;ctx.fillStyle=`rgba(190,216,255,${.12+(seed%30)/100})`;ctx.fillRect(x,y,1,1);}
+    ctx.save();ctx.translate(width/2+panX,height/2+panY);ctx.scale(scale,scale);ctx.translate(-width/2,-height/2);
+    const allowed=new Set(visibleSystems.filter(s=>{
+      if(filter==="high")return Number.isFinite(s.security)&&s.security>=.5;
+      if(filter==="low")return Number.isFinite(s.security)&&s.security>=.1&&s.security<.5;
+      if(filter==="null")return Number.isFinite(s.security)&&s.security<.1;
+      return true;
+    }).map(s=>s.id));
+    ctx.beginPath();ctx.strokeStyle="rgba(90,125,166,.28)";ctx.lineWidth=Math.max(.5,.75/scale);
+    for(const [aId,bId] of data.connections){
+      if(!allowed.has(aId)||!allowed.has(bId))continue;
+      const a=basePoints.get(aId),b=basePoints.get(bId);if(!a||!b)continue;
+      ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
+    }
+    ctx.stroke();
+    let shown=0;
+    for(const system of visibleSystems){
+      if(!allowed.has(system.id))continue;
+      const point=basePoints.get(system.id);if(!point)continue;
+      const killCount=killsBySystem.get(system.id)||0,isIncursion=incursionSystems.has(system.id);
+      if(filter==="kills"&&!killCount)continue;
+      if(filter==="incursions"&&!isIncursion)continue;
+      const p=screenPoint(point),base=colorForSecurity(system.security);
+      const radius=killCount?Math.min(8,2+Math.log2(killCount+1)):isIncursion?4.8:Math.min(3.2,1.4+scale*.35);
+      ctx.beginPath();ctx.arc(p.x,p.y,radius,0,Math.PI*2);
+      ctx.fillStyle=killCount?"#ff9d55":isIncursion?"#c28aff":base;ctx.fill();
+      if(killCount||isIncursion){ctx.beginPath();ctx.arc(p.x,p.y,radius+4,0,Math.PI*2);ctx.strokeStyle=killCount?"rgba(255,157,85,.28)":"rgba(194,138,255,.3)";ctx.lineWidth=2;ctx.stroke();}
+      if(selected&&selected.id===system.id){ctx.beginPath();ctx.arc(p.x,p.y,radius+7,0,Math.PI*2);ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.stroke();}
+      if(scale>3.5&&visibleSystems.length<650){ctx.font=`${Math.max(9,Math.min(13,10+scale*.25))}px system-ui`;ctx.fillStyle="#c6d5e8";ctx.fillText(system.name,p.x+radius+3,p.y-3);}
+      shown++;
+    }
+    if(region&&visibleSystems.length){ctx.font="600 13px system-ui";ctx.fillStyle="rgba(180,204,233,.55)";ctx.fillText(region,18,Math.max(95,height-18));}
+    ctx.restore();
+    countLabel.textContent=`${shown.toLocaleString("de-DE")} Systeme · ${data.connections.length.toLocaleString("de-DE")} Sprungverbindungen`;
+  }
+  function updateDetails(system){
+    selected=system;
+    document.getElementById("system-name").textContent=system?system.name:"System auswählen";
+    const details=document.getElementById("system-details");
+    if(!system){details.textContent="Klicke auf einen Stern oder suche oben nach einem System.";draw();return;}
+    const kills=killsBySystem.get(system.id)||0;
+    details.replaceChildren();
+    for(const [label,value] of [
+      ["Region",system.region],
+      ["Sicherheit",Number.isFinite(system.security)?Number(system.security).toFixed(1):"nicht verfügbar"],
+      ["Aktuelle Killmails im Feed",kills],
+      ["Incursion",incursionSystems.has(system.id)?"Ja":"Nein"]
+    ]){
+      const row=document.createElement("div");
+      row.textContent=`${label}: ${value}`;
+      details.append(row);
+    }
+    const link=document.createElement("a");
+    link.href=`https://evemaps.dotlan.net/system/${encodeURIComponent(system.name)}`;
+    link.target="_blank";link.rel="noopener";link.textContent="System bei DOTLAN öffnen ↗";
+    link.style.display="inline-block";link.style.marginTop=".6rem";details.append(link);
+    draw();
+  }
+  function centerSystem(system){
+    const point=basePoints.get(system.id);if(!point)return;
+    scale=Math.max(scale,4);panX=-(point.x-canvas.clientWidth/2)*scale;panY=-(point.y-canvas.clientHeight/2)*scale;
+    updateDetails(system);
+  }
+  async function loadOverlay(){
+    killsBySystem=new Map();incursionSystems=new Set();
+    if(filter==="kills"){
+      status.textContent="Aktuelle Killmails werden geladen …";
+      try{
+        const query=new URLSearchParams({regions:region,limit:"50"});
+        const response=await fetch(`/api/kills?${query}`);if(!response.ok)throw new Error();
+        const kills=await response.json();
+        for(const kill of kills)if(kill.system_id)killsBySystem.set(kill.system_id,(killsBySystem.get(kill.system_id)||0)+1);
+        status.textContent=`Kill-Overlay: letzte ${kills.length} Killmails im ausgewählten Feed. Die Zahl ist kein Tagesgesamtwert.`;
+      }catch{status.textContent="Killdaten derzeit nicht erreichbar; die Basiskarte bleibt verfügbar.";}
+    }else if(filter==="incursions"){
+      status.textContent="Incursion-Systeme werden geladen …";
+      try{
+        const response=await fetch("/api/incursions");if(!response.ok)throw new Error();
+        const incursions=await response.json();
+        for(const incursion of incursions)for(const system of incursion.infested||[])incursionSystems.add(system.id);
+        status.textContent=`${incursionSystems.size} befallene Systeme in aktuellen Incursions.`;
+      }catch{status.textContent="Incursion-Daten derzeit nicht erreichbar; die Basiskarte bleibt verfügbar.";}
+    }else{
+      status.textContent="Kartendaten aus den EVE-System- und Sprungdaten. Interaktive Darstellung, keine DOTLAN-Grafik.";
+    }
+    if(selected)updateDetails(selected);else draw();
+  }
+  async function loadMap(){
+    try{
+      const response=await fetch("/api/map");if(!response.ok)throw new Error();
+      data=await response.json();
+      for(const name of data.regions){const option=document.createElement("option");option.value=name;option.textContent=name;regionSelect.append(option);}
+      const list=document.getElementById("system-list");
+      for(const system of data.systems){const option=document.createElement("option");option.value=system.name;list.append(option);}
+      setView();resize();
+      status.textContent=data.systems.some(system=>!Number.isFinite(system.security))
+        ?"Karte aus EVE-Systemdaten geladen; Sicherheitsdaten fehlen im gespeicherten Kartencache. Aktualisiere die Kartendaten bei erreichbarem SDE."
+        :"Karte aus EVE-System- und Sprungdaten geladen. DOTLAN ist als externe Referenz verlinkt; die Karte wird eigenständig gezeichnet.";
+    }catch{status.textContent="Kartendaten nicht erreichbar. Bitte später erneut versuchen.";}
+  }
+  regionSelect.addEventListener("change",()=>{
+    region=regionSelect.value;selected=null;updateDetails(null);setView();
+    const link=document.getElementById("dotlan-reference");
+    link.href=region?`https://evemaps.dotlan.net/map/${encodeURIComponent(region)}`:"https://evemaps.dotlan.net/";
+    loadOverlay();
+  });
+  filterSelect.addEventListener("change",()=>{filter=filterSelect.value;loadOverlay();});
+  document.getElementById("map-search").addEventListener("change",event=>{
+    const system=data?.systems.find(s=>s.name.toLowerCase()===event.target.value.trim().toLowerCase());
+    if(!system){status.textContent="System nicht gefunden.";return;}
+    if(region&&system.region!==region){region=system.region;regionSelect.value=region;setView();}
+    centerSystem(system);
+  });
+  document.getElementById("map-zoom-in").addEventListener("click",()=>zoom(1.25));
+  document.getElementById("map-zoom-out").addEventListener("click",()=>zoom(1/1.25));
+  document.getElementById("map-reset").addEventListener("click",()=>{setView();updateDetails(null);});
+  function zoom(factor,x=canvas.clientWidth/2,y=canvas.clientHeight/2){
+    const next=Math.max(.65,Math.min(32,scale*factor)),ratio=next/scale;
+    panX=x-canvas.clientWidth/2-(x-canvas.clientWidth/2-panX)*ratio;
+    panY=y-canvas.clientHeight/2-(y-canvas.clientHeight/2-panY)*ratio;scale=next;draw();
+  }
+  canvas.addEventListener("pointerdown",event=>{
+    if(event.button!==0)return;drag={x:event.clientX,y:event.clientY,panX,panY};
+    canvas.setPointerCapture(event.pointerId);canvas.classList.add("dragging");
+  });
+  canvas.addEventListener("pointermove",event=>{
+    if(!drag)return;panX=drag.panX+event.clientX-drag.x;panY=drag.panY+event.clientY-drag.y;draw();
+  });
+  function stopDrag(event){
+    if(!drag)return;
+    const moved=Math.hypot(event.clientX-drag.x,event.clientY-drag.y);
+    drag=null;canvas.classList.remove("dragging");
+    if(moved>5)return;
+    const rect=canvas.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
+    let nearest=null,distance=14;
+    for(const system of visibleSystems){
+      const p=basePoints.get(system.id);if(!p)continue;
+      const screen=screenPoint(p),d=Math.hypot(screen.x-x,screen.y-y);
+      if(d<distance){nearest=system;distance=d;}
+    }
+    if(nearest)updateDetails(nearest);
+  }
+  canvas.addEventListener("pointerup",stopDrag);canvas.addEventListener("pointercancel",()=>{drag=null;canvas.classList.remove("dragging");});
+  canvas.addEventListener("wheel",event=>{event.preventDefault();const rect=canvas.getBoundingClientRect();zoom(event.deltaY<0?1.12:1/1.12,event.clientX-rect.left,event.clientY-rect.top);},{passive:false});
+  new ResizeObserver(resize).observe(canvas);
+  loadMap();
+})();
+</script>
+{% endblock %}
