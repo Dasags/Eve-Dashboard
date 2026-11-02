@@ -64,15 +64,16 @@
   <nav aria-label="Hauptnavigation">
     <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Übersicht</a>
     {% if active_character %}
-      {% for item in modules %}
-        {% if item.enabled and item.name != 'dashboard' %}
-          <a href="/{{ item.name }}" class="{% if request.url.path.startswith('/' ~ item.name) %}active{% endif %}">{{ item.name|replace('-', ' ')|title }}</a>
-        {% endif %}
-      {% endfor %}
-      {% if modules|selectattr('name','equalto','dashboard')|selectattr('enabled')|list %}
+      {% if dashboard_enabled %}
         <a href="/dashboard" class="{% if request.url.path == '/dashboard' %}active{% endif %}">Char-Dashboard</a>
       {% endif %}
+      {% for item in nav_primary %}
+        <a href="/{{ item.name }}" class="{% if request.url.path.startswith('/' ~ item.name) %}active{% endif %}">{{ item.name|replace('-', ' ')|title }}</a>
+      {% endfor %}
       <a href="/auth/chars" class="{% if request.url.path == '/auth/chars' %}active{% endif %}">Charaktere</a>
+      {% for item in nav_rest %}
+        <a href="/{{ item.name }}" class="{% if request.url.path.startswith('/' ~ item.name) %}active{% endif %}">{{ item.name|replace('-', ' ')|title }}</a>
+      {% endfor %}
       <span class="pill">{{ active_character.name }}</span>
       <form method="post" action="/auth/logout"><button type="submit">Abmelden</button></form>
     {% else %}

@@ -154,15 +154,36 @@ def render(request: Request, page: str, **context):
         (character for character in characters if character["id"] == character_id), None
     )
     granted_modules = storage.account_module_names(account_id)
+    modules = [
+        {**item, "enabled": item["enabled"] or item["name"] in granted_modules}
+        for item in storage.list_modules()
+    ]
+    primary_names = (
+        "wallet",
+        "skills",
+        "planetary-industry",
+        "industry",
+        "marketwatcher",
+        "incursions",
+    )
+    enabled_modules = {item["name"]: item for item in modules if item["enabled"]}
     return templates.TemplateResponse(
         request,
         page,
         {
             "app_name": APP_NAME,
-            "modules": [
-                {**item, "enabled": item["enabled"] or item["name"] in granted_modules}
-                for item in storage.list_modules()
+            "nav_primary": [
+                enabled_modules[name] for name in primary_names if name in enabled_modules
             ],
+            "nav_rest": sorted(
+                (
+                    item
+                    for item in enabled_modules.values()
+                    if item["name"] != "dashboard" and item["name"] not in primary_names
+                ),
+                key=lambda item: item["name"],
+            ),
+            "dashboard_enabled": "dashboard" in enabled_modules,
             "active_character": selected_character,
             "characters": characters,
             **context,
