@@ -2,72 +2,124 @@
 {% block title %}Sternenkarte – {{ app_name }}{% endblock %}
 {% block head %}
 <style>
-  .map-workspace { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:.85rem; min-height:calc(100vh - 130px); }
-  .map-stage { position:relative; height:calc(100vh - 130px); min-height:520px; overflow:hidden; border:1px solid #263a55; border-radius:.9rem; background:radial-gradient(ellipse at 50% 48%,#101b2c 0,#070d18 72%); box-shadow:0 12px 45px rgb(0 0 0 / 35%); }
-  #eve-map { display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
+  body.space-page header,body.space-page footer { display:none; }
+  body.space-page main { width:100%; padding:0; }
+  .galaxy { position:fixed; inset:0; overflow:hidden; background:#030611; color:#dce7f7; }
+  .galaxy::before,.galaxy::after { content:""; position:absolute; inset:-20%; pointer-events:none; }
+  .galaxy::before { opacity:.63; background:radial-gradient(ellipse at 48% 48%,transparent 6%,rgb(26 39 114 / 18%) 22%,transparent 36%),radial-gradient(ellipse at 51% 47%,transparent 20%,rgb(115 33 131 / 18%) 34%,transparent 50%),radial-gradient(ellipse at 57% 51%,rgb(29 86 177 / 20%) 0,transparent 31%),radial-gradient(ellipse at 41% 53%,rgb(95 35 135 / 15%) 0,transparent 34%); filter:blur(35px); transform:rotate(-18deg) scale(1.1); }
+  .galaxy::after { opacity:.48; background-image:radial-gradient(1px 1px at 6% 13%,#fff 98%,transparent),radial-gradient(1px 1px at 19% 73%,#d7e8ff 98%,transparent),radial-gradient(1.5px 1.5px at 33% 28%,#fff 98%,transparent),radial-gradient(1px 1px at 48% 81%,#c2d7ff 98%,transparent),radial-gradient(1px 1px at 63% 11%,#fff 98%,transparent),radial-gradient(1.5px 1.5px at 78% 62%,#dce8ff 98%,transparent),radial-gradient(1px 1px at 91% 31%,#fff 98%,transparent); background-size:311px 257px,379px 331px,463px 389px,541px 433px,617px 499px,733px 563px,839px 617px; }
+  #eve-map { position:absolute; inset:42px 0 0; width:100%; height:calc(100% - 42px); touch-action:none; cursor:grab; }
   #eve-map.dragging { cursor:grabbing; }
-  .map-toolbar { position:absolute; z-index:2; top:.85rem; left:.85rem; right:.85rem; display:flex; flex-wrap:wrap; align-items:end; gap:.55rem; padding:.7rem; border:1px solid rgb(70 96 128 / 50%); border-radius:.7rem; background:rgb(5 11 20 / 88%); backdrop-filter:blur(8px); }
-  .map-toolbar label { min-width:145px; flex:1; font-size:.75rem; }
-  .map-toolbar input,.map-toolbar select { min-height:2.2rem; }
-  .map-actions { display:flex; gap:.35rem; }
-  .map-count { margin-left:auto; color:#91a6c1; font-size:.78rem; }
-  .map-help { position:absolute; bottom:.75rem; left:.85rem; padding:.4rem .65rem; border-radius:.45rem; background:rgb(5 11 20 / 78%); color:#91a6c1; font-size:.75rem; pointer-events:none; }
-  .map-side { display:grid; grid-template-rows:auto 1fr auto; gap:.75rem; min-width:0; }
-  .map-info { min-height:150px; }
-  .map-legend { display:grid; gap:.55rem; }
-  .legend-row { display:flex; align-items:center; gap:.55rem; color:#aab8ca; font-size:.84rem; }
-  .legend-dot { width:.65rem; height:.65rem; border-radius:50%; box-shadow:0 0 10px currentColor; }
-  .map-status { color:#91a6c1; font-size:.84rem; line-height:1.5; }
-  @media(max-width:900px) { .map-workspace { grid-template-columns:1fr; } .map-stage { height:70vh; min-height:460px; } .map-side { grid-template-columns:1fr 1fr; grid-template-rows:auto; } .map-status { grid-column:1/-1; } }
-  @media(max-width:600px) { .map-side { grid-template-columns:1fr; } .map-toolbar { top:.45rem; left:.45rem; right:.45rem; gap:.4rem; } .map-toolbar label { min-width:calc(50% - .5rem); } .map-count { width:100%; margin-left:0; } .map-help { bottom:.4rem; left:.45rem; } }
+  .map-top { position:absolute; z-index:3; inset:0 0 auto; height:42px; display:flex; align-items:center; gap:0; padding:0 8px; border-bottom:1px solid #222836; background:rgb(5 8 15 / 94%); box-shadow:0 3px 20px #0008; }
+  .map-brand { width:210px; flex:none; padding:0 12px; color:#e7edf7; font-weight:750; white-space:nowrap; }
+  .map-brand span { margin-right:8px; color:#54c6db; }
+  .map-top-tools { display:flex; align-items:center; gap:4px; min-width:0; }
+  .map-top input,.map-top select { width:auto; min-width:125px; min-height:30px; height:30px; padding:4px 8px; border-radius:3px; font-size:.75rem; background:#10141e; }
+  .map-top #map-search { width:205px; }
+  .map-top button { min-height:30px; height:30px; padding:3px 10px; border-radius:3px; font-size:.75rem; background:#171b26; }
+  .map-top button.active { border-color:#397e94; color:#72d7e8; background:#122935; }
+  .map-live { display:flex; align-items:center; gap:5px; padding:0 10px; color:#91a5bd; font-size:.72rem; white-space:nowrap; }
+  .live-dot { width:7px; height:7px; border-radius:50%; background:#4ad58a; box-shadow:0 0 9px #4ad58a; }
+  .map-ticker { flex:1; min-width:40px; overflow:hidden; padding:0 10px; color:#aab8ca; font-size:.72rem; white-space:nowrap; text-overflow:ellipsis; }
+  .map-ticker strong { color:#7c9dbd; }
+  .map-rail { position:absolute; z-index:2; top:51px; left:8px; display:grid; gap:3px; width:76px; padding:4px; border:1px solid #262c38; background:rgb(8 11 18 / 93%); box-shadow:0 4px 18px #0008; }
+  .map-rail button { min-height:49px; display:grid; align-content:center; gap:3px; padding:4px 2px; border:0; border-radius:2px; background:transparent; color:#9ca8b7; font-size:.66rem; }
+  .map-rail button span { color:#d6e0ed; font-size:1rem; }
+  .map-rail button:hover,.map-rail button.active { background:#151c27; color:#64c8dc; }
+  .map-sidebox { position:absolute; z-index:2; top:53px; right:10px; width:250px; max-height:calc(100vh - 70px); overflow:auto; padding:.85rem; border:1px solid #28303e; background:rgb(8 11 18 / 91%); box-shadow:0 5px 22px #0008; }
+  .map-sidebox h2 { margin:.25rem 0 .65rem; font-size:.95rem; }
+  .map-sidebox .eyebrow { font-size:.67rem; }
+  .map-info { min-height:90px; margin-bottom:.55rem; }
+  .map-details { color:#aab8ca; font-size:.76rem; line-height:1.75; }
+  .map-legend { display:grid; gap:.45rem; }
+  .legend-row { display:flex; align-items:center; gap:.5rem; color:#aab8ca; font-size:.74rem; }
+  .legend-dot { width:8px; height:8px; border-radius:50%; box-shadow:0 0 8px currentColor; }
+  .map-tools-box { position:absolute; z-index:2; bottom:10px; left:94px; display:flex; align-items:center; gap:.6rem; padding:.55rem .7rem; border:1px solid #28303e; background:rgb(8 11 18 / 91%); color:#aab8ca; font-size:.73rem; }
+  .map-tools-box label { display:flex; align-items:center; gap:.4rem; color:#aab8ca; font-size:.73rem; }
+  .map-tools-box select { width:auto; min-width:100px; min-height:26px; padding:3px 6px; font-size:.72rem; }
+  .map-tools-box input { width:14px; min-height:14px; }
+  .map-bottom { position:absolute; z-index:2; bottom:10px; right:10px; padding:.4rem .65rem; background:rgb(8 11 18 / 85%); color:#8d9cb1; font-size:.7rem; }
+  .map-status { position:absolute; z-index:3; bottom:48px; left:94px; max-width:min(500px,calc(100% - 115px)); color:#aab8ca; font-size:.72rem; text-shadow:0 1px 3px #000; }
+  .route-box { display:none; margin-top:.7rem; padding-top:.7rem; border-top:1px solid #293345; }
+  .route-box.open { display:block; }
+  .route-box label { margin-bottom:.45rem; color:#aab8ca; font-size:.72rem; }
+  .route-box input { min-height:30px; font-size:.75rem; }
+  .kill-list { display:grid; gap:.35rem; max-height:230px; overflow:auto; margin-top:.65rem; }
+  .kill-item { display:flex; justify-content:space-between; gap:.4rem; color:#aab8ca; font-size:.7rem; }
+  .kill-item strong { color:#ff9674; font-weight:600; }
+  @media(max-width:1050px) { .map-brand { width:155px; } .map-ticker { display:none; } .map-sidebox { width:225px; } }
+  @media(max-width:720px) { .map-top { height:auto; min-height:42px; flex-wrap:wrap; padding:4px; } .map-brand { width:auto; padding:0 6px; font-size:.8rem; } .map-live { padding:0 5px; } .map-top-tools { order:3; width:100%; overflow:auto; } .map-top input,.map-top select { min-width:100px; } .map-top #map-search { width:150px; } #eve-map { inset:72px 0 0; height:calc(100% - 72px); } .map-rail { top:82px; left:4px; width:59px; } .map-rail button { min-height:43px; font-size:.59rem; } .map-sidebox { top:82px; right:5px; width:190px; max-height:50vh; padding:.65rem; } .map-tools-box { left:68px; bottom:5px; flex-wrap:wrap; gap:.35rem; max-width:calc(100% - 80px); } .map-status { left:70px; bottom:68px; } .map-bottom { display:none; } }
 </style>
 {% endblock %}
 {% block content %}
-<div style="display:flex;justify-content:space-between;align-items:end;gap:1rem;margin-bottom:.75rem">
-  <div><div class="eyebrow">New Eden · Interaktive Karte</div><h1 style="margin:.2rem 0 0;font-size:1.7rem">Sternenkarte</h1></div>
-  <a id="dotlan-reference" href="https://evemaps.dotlan.net/" target="_blank" rel="noopener" class="hint" style="font-size:.8rem">DOTLAN-Referenz ↗</a>
-</div>
-<div class="map-workspace">
-  <section class="map-stage" aria-label="Interaktive Karte des EVE-Universums">
-    <div class="map-toolbar">
-      <label>Region<select id="map-region"><option value="">Ganz New Eden</option></select></label>
-      <label>Kartenfilter<select id="map-filter">
-        <option value="all">Alle Systeme</option>
-        <option value="kills">Aktuelle Killmails</option>
-        <option value="incursions">Incursions</option>
-        <option value="high">Highsec</option>
-        <option value="low">Lowsec</option>
-        <option value="null">Nullsec / Wormholes</option>
-      </select></label>
-      <label>System suchen<input id="map-search" list="system-list" placeholder="Systemname …" autocomplete="off"><datalist id="system-list"></datalist></label>
-      <div class="map-actions">
-        <button id="map-zoom-out" type="button" aria-label="Verkleinern">−</button>
-        <button id="map-zoom-in" type="button" aria-label="Vergrößern">+</button>
-        <button id="map-reset" type="button">Reset</button>
-      </div>
-      <span id="map-count" class="map-count">Kartendaten werden geladen …</span>
+<div class="galaxy">
+  <div class="map-top">
+    <div class="map-brand"><span>✦</span>EVE WORLD · MAP</div>
+    <div class="map-top-tools">
+      <input id="map-search" list="system-list" placeholder="System, Region suchen …" autocomplete="off">
+      <datalist id="system-list"></datalist>
+      <select id="map-region" aria-label="Region"><option value="">Ganz New Eden</option></select>
+      <button id="map-reset" type="button">Zurücksetzen</button>
+      <button id="map-global" class="active" type="button">New Eden</button>
+      <label style="display:flex;align-items:center;gap:4px;color:#aab8ca;font-size:.72rem"><input id="map-live" type="checkbox" checked style="width:13px;min-height:13px"> LIVE</label>
+      <select id="map-filter" aria-label="Kartenfilter">
+        <option value="all">Alle Systeme</option><option value="kills">Killmails</option>
+        <option value="incursions">Incursions</option><option value="high">Highsec</option>
+        <option value="low">Lowsec</option><option value="null">Nullsec</option>
+      </select>
+      <button id="map-zoom-out" type="button" aria-label="Verkleinern">−</button>
+      <button id="map-zoom-in" type="button" aria-label="Vergrößern">+</button>
     </div>
-    <canvas id="eve-map" aria-label="Sternensysteme. Ziehen zum Verschieben, Mausrad zum Zoomen."></canvas>
-    <div class="map-help">Ziehen: verschieben · Mausrad: zoomen · System anklicken: Details</div>
-  </section>
-  <aside class="map-side">
-    <section class="panel map-info">
+    <div class="map-live"><span class="live-dot"></span><span id="map-count">Lade Karte …</span></div>
+    <div id="map-ticker" class="map-ticker"><strong>New Eden</strong> · Systemkarte wird geladen</div>
+    <a href="https://evemaps.dotlan.net/" target="_blank" rel="noopener" class="hint" style="font-size:.7rem;white-space:nowrap">DOTLAN ↗</a>
+  </div>
+  <canvas id="eve-map" aria-label="Interaktive Sternenkarte. Ziehen zum Verschieben, Mausrad zum Zoomen."></canvas>
+  <nav class="map-rail" aria-label="Kartenwerkzeuge">
+    <button id="tool-route" type="button"><span>⌁</span>Routing</button>
+    <button id="tool-activity" type="button"><span>⌁</span>Aktivitäten</button>
+    <button id="tool-killboard" type="button"><span>▣</span>Killboard</button>
+    <button id="tool-sovereignty" type="button" title="Souveränitätsdaten sind derzeit nicht eingebunden"><span>◇</span>Sovereignty</button>
+    <button id="tool-force" type="button" title="Force-Projection-Daten sind derzeit nicht eingebunden"><span>⌖</span>Force Proj.</button>
+    <button id="tool-view" type="button"><span>◉</span>Ansicht</button>
+    <button id="tool-tools" type="button"><span>⚙</span>Werkzeuge</button>
+  </nav>
+  <aside class="map-sidebox">
+    <section class="map-info">
       <div class="eyebrow">System-Details</div>
-      <h2 id="system-name" style="margin:.3rem 0">System auswählen</h2>
-      <div id="system-details" class="map-status">Klicke auf einen Stern oder suche oben nach einem System.</div>
+      <h2 id="system-name">New Eden</h2>
+      <div id="system-details" class="map-details">Klicke auf ein System oder suche nach einem Namen.</div>
     </section>
-    <section class="panel">
-      <div class="eyebrow">Legende</div><h2 style="margin:.3rem 0 .8rem">Sicherheit</h2>
+    <section id="route-box" class="route-box">
+      <div class="eyebrow">Kürzeste Sprungroute</div>
+      <label>Start<input id="route-start" list="system-list" placeholder="Startsystem"></label>
+      <label>Ziel<input id="route-end" list="system-list" placeholder="Zielsystem"></label>
+      <button id="route-calculate" type="button" style="width:100%">Route berechnen</button>
+      <div id="route-result" class="map-details"></div>
+    </section>
+    <section id="killboard-box" class="route-box">
+      <div class="eyebrow">Killboard · letzte Feed-Einträge</div>
+      <div id="kill-list" class="kill-list"></div>
+    </section>
+    <section style="margin-top:.7rem;padding-top:.7rem;border-top:1px solid #293345">
+      <div class="eyebrow">Legende</div><h2>Sicherheit & Aktivität</h2>
       <div class="map-legend">
-        <div class="legend-row"><span class="legend-dot" style="color:#67d8ff;background:#67d8ff"></span>Highsec · 0,5 bis 1,0</div>
-        <div class="legend-row"><span class="legend-dot" style="color:#ffd166;background:#ffd166"></span>Lowsec · 0,1 bis 0,4</div>
+        <div class="legend-row"><span class="legend-dot" style="color:#67d8ff;background:#67d8ff"></span>Highsec · 0,5–1,0</div>
+        <div class="legend-row"><span class="legend-dot" style="color:#ffd166;background:#ffd166"></span>Lowsec · 0,1–0,4</div>
         <div class="legend-row"><span class="legend-dot" style="color:#ff658a;background:#ff658a"></span>Nullsec / Wormholes</div>
-        <div class="legend-row"><span class="legend-dot" style="color:#ff9d55;background:#ff9d55"></span>Killmails in jüngstem Feed</div>
+        <div class="legend-row"><span class="legend-dot" style="color:#ff9d55;background:#ff9d55"></span>Killmails im aktuellen Feed</div>
         <div class="legend-row"><span class="legend-dot" style="color:#c28aff;background:#c28aff"></span>Aktuelle Incursion</div>
       </div>
     </section>
-    <div id="map-status" class="panel map-status" role="status">Die Karte wird aus EVE-System- und Sprungdaten geladen.</div>
   </aside>
+  <div class="map-tools-box">
+    <label>Farbe <select id="map-color"><option value="security">Sicherheit</option><option value="region">Region</option></select></label>
+    <label><input id="layer-jumps" type="checkbox" checked> Sprungverbindungen</label>
+    <label><input id="layer-labels" type="checkbox" checked> Labels</label>
+    <label><input id="layer-kills" type="checkbox" checked> Killmails</label>
+  </div>
+  <div id="map-status" class="map-status" role="status">Kartendaten werden geladen …</div>
+  <div class="map-bottom">2D · Ziehen verschiebt · Mausrad zoomt · Klick zeigt Systemdetails</div>
 </div>
 {% endblock %}
 {% block scripts %}
@@ -76,158 +128,401 @@
   const canvas=document.getElementById("eve-map"),ctx=canvas.getContext("2d");
   const regionSelect=document.getElementById("map-region"),filterSelect=document.getElementById("map-filter");
   const status=document.getElementById("map-status"),countLabel=document.getElementById("map-count");
-  let data=null,region="",filter="all",scale=1,panX=0,panY=0,drag=null,selected=null;
-  let killsBySystem=new Map(),incursionSystems=new Set(),basePoints=new Map(),visibleSystems=[];
-  const dpr=()=>Math.max(1,window.devicePixelRatio||1);
-  const colorForSecurity=value=>!Number.isFinite(value)?"#9fb0c5":value>=.5?"#67d8ff":value>=.1?"#ffd166":"#ff658a";
+  const systemName=document.getElementById("system-name"),systemDetails=document.getElementById("system-details");
+  let data=null,selectedRegion="",filter="all",scale=1,panX=0,panY=0,drag=null,selected=null;
+  let visibleNodes=[],nodeById=new Map(),screenById=new Map(),systemById=new Map();
+  let killCounts=new Map(),killRows=[],incursionSystems=new Set(),route=[],showJumps=true,showLabels=true,showKills=true;
+  let colorMode="security",liveTimer=null,killboardOpen=false,routeOpen=false;
+  const colorForSecurity=value=>!Number.isFinite(value)?"#9fb0c5":value>=.5?"#49c8e8":value>=.1?"#e9b94e":"#d34f82";
+  const systemLookup=new Map();
+  const ratio=()=>Math.max(1,window.devicePixelRatio||1);
+  const safeText=(parent,text)=>{parent.textContent=text;};
+
   function resize(){
-    const rect=canvas.getBoundingClientRect(),ratio=dpr();
-    canvas.width=Math.max(1,Math.round(rect.width*ratio));canvas.height=Math.max(1,Math.round(rect.height*ratio));
-    ctx.setTransform(ratio,0,0,ratio,0,0);
-    if(data)setView();
+    const bounds=canvas.getBoundingClientRect(),dpr=ratio();
+    canvas.width=Math.max(1,Math.floor(bounds.width*dpr));
+    canvas.height=Math.max(1,Math.floor(bounds.height*dpr));
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    if(data)layoutAndDraw();
   }
-  function setView(){
-    visibleSystems=region?data.systems.filter(s=>s.region===region):data.systems;
-    if(!visibleSystems.length)return;
-    const xs=visibleSystems.map(s=>s.x),ys=visibleSystems.map(s=>s.y);
-    const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
-    const width=canvas.clientWidth,height=canvas.clientHeight,pad=54;
-    const fit=Math.min((width-2*pad)/(maxX-minX||1),(height-2*pad)/(maxY-minY||1));
-    const mapWidth=(maxX-minX)*fit,mapHeight=(maxY-minY)*fit,ox=(width-mapWidth)/2,oy=(height-mapHeight)/2;
-    basePoints=new Map(visibleSystems.map(s=>[s.id,{x:ox+(s.x-minX)*fit,y:height-oy-(s.y-minY)*fit,system:s}]));
-    scale=1;panX=0;panY=0;draw();
+  function graphLayout(nodes,edges,width,height){
+    if(!nodes.length)return new Map();
+    const margin=65,spanX=Math.max(...nodes.map(n=>n.x))-Math.min(...nodes.map(n=>n.x))||1;
+    const spanY=Math.max(...nodes.map(n=>n.y))-Math.min(...nodes.map(n=>n.y))||1;
+    const minX=Math.min(...nodes.map(n=>n.x)),minY=Math.min(...nodes.map(n=>n.y));
+    const fit=Math.min((width-2*margin)/spanX,(height-2*margin)/spanY);
+    const points=nodes.map((node,index)=>({
+      node,
+      x:margin+(node.x-minX)*fit+(index%3)*.07,
+      y:height-margin-(node.y-minY)*fit+Math.floor(index%5)*.05
+    }));
+    const positions=new Map(points.map(p=>[p.node.id,p]));
+    const links=edges.map(([a,b])=>[positions.get(a),positions.get(b)]).filter(([a,b])=>a&&b&&a!==b);
+    const k=Math.sqrt(width*height/nodes.length)*.75;
+    let temperature=Math.min(width,height)*.12;
+    for(let iteration=0;iteration<65;iteration++){
+      for(const point of points){point.dx=0;point.dy=0;}
+      for(let i=0;i<points.length;i++){
+        for(let j=i+1;j<points.length;j++){
+          const a=points[i],b=points[j],dx=a.x-b.x,dy=a.y-b.y;
+          const distance=Math.max(1,Math.hypot(dx,dy)),force=(k*k)/distance;
+          const fx=dx/distance*force,fy=dy/distance*force;
+          a.dx+=fx;a.dy+=fy;b.dx-=fx;b.dy-=fy;
+        }
+      }
+      for(const [a,b] of links){
+        const dx=a.x-b.x,dy=a.y-b.y,distance=Math.max(1,Math.hypot(dx,dy));
+        const force=(distance*distance)/k,fx=dx/distance*force,fy=dy/distance*force;
+        a.dx-=fx;a.dy-=fy;b.dx+=fx;b.dy+=fy;
+      }
+      const gravity=.012;
+      for(const point of points){
+        point.dx+=(width/2-point.x)*gravity;point.dy+=(height/2-point.y)*gravity;
+        const move=Math.max(1,Math.hypot(point.dx,point.dy));
+        point.x=Math.max(margin,Math.min(width-margin,point.x+point.dx/move*Math.min(move,temperature)));
+        point.y=Math.max(margin,Math.min(height-margin,point.y+point.dy/move*Math.min(move,temperature)));
+      }
+      temperature*=.94;
+    }
+    return positions;
   }
-  function screenPoint(point){
-    const w=canvas.clientWidth,h=canvas.clientHeight;
-    return {x:w/2+(point.x-w/2)*scale+panX,y:h/2+(point.y-h/2)*scale+panY};
+  function prepareNodes(){
+    const width=canvas.clientWidth,height=canvas.clientHeight;
+    const regional=Boolean(selectedRegion);
+    if(regional){
+      visibleNodes=data.systems.filter(s=>s.region===selectedRegion);
+      const ids=new Set(visibleNodes.map(s=>s.id));
+      const edges=data.connections.filter(([a,b])=>ids.has(a)&&ids.has(b));
+      nodeById=graphLayout(visibleNodes,edges,width,height);
+    }else{
+      visibleNodes=data.region_centers.map(r=>({
+        ...r,id:r.region_id,name:r.name,region:r.name,security:r.security,is_region:true
+      }));
+      const edges=[...data.connectionsByRegion.values()].map(edge=>[edge.a,edge.b]);
+      nodeById=graphLayout(visibleNodes,edges,width,height);
+    }
   }
-  function draw(){
-    if(!data)return;
+  function pointFor(id){
+    const point=nodeById.get(id);
+    if(!point)return null;
+    const width=canvas.clientWidth,height=canvas.clientHeight;
+    return {x:width/2+(point.x-width/2)*scale+panX,y:height/2+(point.y-height/2)*scale+panY};
+  }
+  function background(){
     const width=canvas.clientWidth,height=canvas.clientHeight;
     ctx.clearRect(0,0,width,height);
-    const bg=ctx.createRadialGradient(width*.52,height*.48,5,width*.52,height*.48,Math.max(width,height)*.8);
-    bg.addColorStop(0,"#101a2b");bg.addColorStop(1,"#050a13");ctx.fillStyle=bg;ctx.fillRect(0,0,width,height);
-    let seed=8731;for(let i=0;i<190;i++){seed=(seed*16807)%2147483647;const x=(seed%10000)/10000*width;seed=(seed*16807)%2147483647;const y=(seed%10000)/10000*height;ctx.fillStyle=`rgba(190,216,255,${.12+(seed%30)/100})`;ctx.fillRect(x,y,1,1);}
-    ctx.save();ctx.translate(width/2+panX,height/2+panY);ctx.scale(scale,scale);ctx.translate(-width/2,-height/2);
-    const allowed=new Set(visibleSystems.filter(s=>{
-      if(filter==="high")return Number.isFinite(s.security)&&s.security>=.5;
-      if(filter==="low")return Number.isFinite(s.security)&&s.security>=.1&&s.security<.5;
-      if(filter==="null")return Number.isFinite(s.security)&&s.security<.1;
-      return true;
-    }).map(s=>s.id));
-    ctx.beginPath();ctx.strokeStyle="rgba(90,125,166,.28)";ctx.lineWidth=Math.max(.5,.75/scale);
-    for(const [aId,bId] of data.connections){
-      if(!allowed.has(aId)||!allowed.has(bId))continue;
-      const a=basePoints.get(aId),b=basePoints.get(bId);if(!a||!b)continue;
-      ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
-    }
-    ctx.stroke();
-    let shown=0;
-    for(const system of visibleSystems){
-      if(!allowed.has(system.id))continue;
-      const point=basePoints.get(system.id);if(!point)continue;
-      const killCount=killsBySystem.get(system.id)||0,isIncursion=incursionSystems.has(system.id);
-      if(filter==="kills"&&!killCount)continue;
-      if(filter==="incursions"&&!isIncursion)continue;
-      const p=screenPoint(point),base=colorForSecurity(system.security);
-      const radius=killCount?Math.min(8,2+Math.log2(killCount+1)):isIncursion?4.8:Math.min(3.2,1.4+scale*.35);
-      ctx.beginPath();ctx.arc(p.x,p.y,radius,0,Math.PI*2);
-      ctx.fillStyle=killCount?"#ff9d55":isIncursion?"#c28aff":base;ctx.fill();
-      if(killCount||isIncursion){ctx.beginPath();ctx.arc(p.x,p.y,radius+4,0,Math.PI*2);ctx.strokeStyle=killCount?"rgba(255,157,85,.28)":"rgba(194,138,255,.3)";ctx.lineWidth=2;ctx.stroke();}
-      if(selected&&selected.id===system.id){ctx.beginPath();ctx.arc(p.x,p.y,radius+7,0,Math.PI*2);ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.stroke();}
-      if(scale>3.5&&visibleSystems.length<650){ctx.font=`${Math.max(9,Math.min(13,10+scale*.25))}px system-ui`;ctx.fillStyle="#c6d5e8";ctx.fillText(system.name,p.x+radius+3,p.y-3);}
-      shown++;
-    }
-    if(region&&visibleSystems.length){ctx.font="600 13px system-ui";ctx.fillStyle="rgba(180,204,233,.55)";ctx.fillText(region,18,Math.max(95,height-18));}
-    ctx.restore();
-    countLabel.textContent=`${shown.toLocaleString("de-DE")} Systeme · ${data.connections.length.toLocaleString("de-DE")} Sprungverbindungen`;
-  }
-  function updateDetails(system){
-    selected=system;
-    document.getElementById("system-name").textContent=system?system.name:"System auswählen";
-    const details=document.getElementById("system-details");
-    if(!system){details.textContent="Klicke auf einen Stern oder suche oben nach einem System.";draw();return;}
-    const kills=killsBySystem.get(system.id)||0;
-    details.replaceChildren();
-    for(const [label,value] of [
-      ["Region",system.region],
-      ["Sicherheit",Number.isFinite(system.security)?Number(system.security).toFixed(1):"nicht verfügbar"],
-      ["Aktuelle Killmails im Feed",kills],
-      ["Incursion",incursionSystems.has(system.id)?"Ja":"Nein"]
+    ctx.fillStyle="#030611";ctx.fillRect(0,0,width,height);
+    for(const [x,y,r,color] of [
+      [.52,.45,.72,"rgba(39,60,177,.20)"],[.38,.54,.56,"rgba(99,31,132,.18)"],
+      [.67,.43,.48,"rgba(23,104,181,.16)"],[.50,.62,.34,"rgba(125,40,151,.12)"]
     ]){
-      const row=document.createElement("div");
-      row.textContent=`${label}: ${value}`;
-      details.append(row);
+      const g=ctx.createRadialGradient(width*x,height*y,1,width*x,height*y,Math.max(width,height)*r);
+      g.addColorStop(0,color);g.addColorStop(1,"transparent");ctx.fillStyle=g;ctx.fillRect(0,0,width,height);
     }
-    const link=document.createElement("a");
-    link.href=`https://evemaps.dotlan.net/system/${encodeURIComponent(system.name)}`;
-    link.target="_blank";link.rel="noopener";link.textContent="System bei DOTLAN öffnen ↗";
-    link.style.display="inline-block";link.style.marginTop=".6rem";details.append(link);
+    let seed=8731;
+    for(let i=0;i<430;i++){
+      seed=(seed*16807)%2147483647;const x=seed%width;
+      seed=(seed*16807)%2147483647;const y=seed%height;
+      const bright=(seed%70)/1000+.1;ctx.fillStyle=`rgba(217,231,255,${bright})`;
+      ctx.fillRect(x,y,seed%19===0?1.5:1,seed%19===0?1.5:1);
+    }
+  }
+  function allowedNode(node){
+    if(selectedRegion){
+      if(filter==="high")return Number.isFinite(node.security)&&node.security>=.5;
+      if(filter==="low")return Number.isFinite(node.security)&&node.security>=.1&&node.security<.5;
+      if(filter==="null")return Number.isFinite(node.security)&&node.security<.1;
+      if(filter==="kills")return (killCounts.get(node.id)||0)>0;
+      if(filter==="incursions")return incursionSystems.has(node.id);
+      return true;
+    }
+    if(filter==="kills")return (killCountsByRegion.get(node.id)||0)>0;
+    if(filter==="incursions")return (incursionsByRegion.get(node.id)||0)>0;
+    if(filter==="high")return node.securityBands?.high>0;
+    if(filter==="low")return node.securityBands?.low>0;
+    if(filter==="null")return node.securityBands?.null>0;
+    return true;
+  }
+  let killCountsByRegion=new Map(),incursionsByRegion=new Map();
+  function drawNode(node,point){
+    const global=!selectedRegion;
+    const killCount=global?(killCountsByRegion.get(node.id)||0):(killCounts.get(node.id)||0);
+    const incursion=global?(incursionsByRegion.get(node.id)||0):(incursionSystems.has(node.id)?1:0);
+    const base=colorMode==="region"&&global?regionColor(node.name):colorForSecurity(node.security);
+    const radius=global?Math.min(11,5+Math.log2(killCount+1)*1.5):Math.min(7,3+Math.log2(killCount+1));
+    if(selected&&(selected.id===node.id||(!global&&selected.region===node.region))){
+      ctx.beginPath();ctx.arc(point.x,point.y,radius+8,0,Math.PI*2);ctx.strokeStyle="rgba(104,218,237,.85)";ctx.lineWidth=1.5;ctx.stroke();
+    }
+    if(killCount&&showKills){
+      ctx.beginPath();ctx.arc(point.x,point.y,radius+6,0,Math.PI*2);ctx.strokeStyle="rgba(244,81,104,.45)";ctx.lineWidth=2;ctx.stroke();
+    }
+    ctx.beginPath();
+    if(global){
+      ctx.rect(point.x-radius,point.y-radius,radius*2,radius*2);
+      ctx.fillStyle=killCount&&showKills?"#e54f76":incursion?"#b881f2":base;ctx.fill();
+      ctx.strokeStyle="#d6b1f4";ctx.lineWidth=1;ctx.stroke();
+    }else{
+      ctx.arc(point.x,point.y,radius,0,Math.PI*2);
+      ctx.fillStyle=killCount&&showKills?"#ff536f":incursion?"#c28aff":base;ctx.fill();
+      ctx.strokeStyle=Number.isFinite(node.security)&&node.security>=.5?"#a4edff":"#e6b9dc";ctx.lineWidth=1.1;ctx.stroke();
+    }
+    if(showLabels&&(global||scale>1.05||visibleNodes.length<150)){
+      const label=global?node.name:node.name.toUpperCase();
+      ctx.font=`${global?"600 10px":"600 9px"} system-ui`;
+      ctx.textAlign="center";ctx.fillStyle=global?"#ccd5e5":"#e5e9f1";
+      ctx.shadowColor="#05060c";ctx.shadowBlur=5;ctx.fillText(label,point.x,point.y+radius+13);ctx.shadowBlur=0;
+    }
+    if(killCount&&showKills){
+      ctx.font="600 9px system-ui";ctx.textAlign="center";ctx.fillStyle="#ff687b";
+      ctx.fillText(`Kills ${killCount}`,point.x,point.y-radius-8);
+    }
+  }
+  function draw(){
+    if(!data||!visibleNodes.length)return;
+    background();
+    const isGlobal=!selectedRegion;
+    const validIds=new Set(visibleNodes.filter(allowedNode).map(n=>n.id));
+    if(showJumps){
+      ctx.beginPath();ctx.strokeStyle="rgba(157,171,193,.25)";ctx.lineWidth=.85;
+      const edges=isGlobal?[...data.connectionsByRegion.values()].map(e=>[e.a,e.b]):data.connections;
+      for(const [a,b] of edges){
+        if(!validIds.has(a)||!validIds.has(b))continue;
+        const p=pointFor(a),q=pointFor(b);if(!p||!q)continue;
+        ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);
+      }
+      ctx.stroke();
+    }
+    if(route.length>1){
+      ctx.beginPath();ctx.strokeStyle="#5ce4c5";ctx.lineWidth=3;
+      const routeNodes=selectedRegion
+        ?route.filter(n=>n.region===selectedRegion)
+        :[...new Map(route.map(n=>[n.region_id,{id:n.region_id,region_id:n.region_id}])).values()];
+      for(let i=0;i<routeNodes.length-1;i++){
+        const a=pointFor(routeNodes[i].id),b=pointFor(routeNodes[i+1].id);
+        if(a&&b){ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}
+      }
+      ctx.stroke();
+    }
+    let count=0;
+    for(const node of visibleNodes){
+      if(!allowedNode(node))continue;
+      const point=pointFor(node.id);if(!point)continue;
+      drawNode(node,point);count++;
+    }
+    countLabel.textContent=isGlobal
+      ?`${count.toLocaleString("de-DE")} Regionen · ${data.systems.length.toLocaleString("de-DE")} Systeme`
+      :`${count.toLocaleString("de-DE")} Systeme · ${data.connections.filter(([a,b])=>nodeById.has(a)&&nodeById.has(b)).length.toLocaleString("de-DE")} Sprünge`;
+  }
+  function layoutAndDraw(){prepareNodes();draw();}
+  function regionColor(name){
+    let hash=0;for(const char of name)hash=(hash*31+char.charCodeAt(0))|0;
+    return `hsl(${Math.abs(hash)%360} 58% 58%)`;
+  }
+  function updateDetails(node){
+    selected=node;
+    if(!node){systemName.textContent=selectedRegion||"New Eden";systemDetails.textContent="Klicke auf ein System oder suche nach einem Namen.";draw();return;}
+    systemName.textContent=node.name;
+    systemDetails.replaceChildren();
+    const incursionCount=selectedRegion
+      ?(incursionSystems.has(node.id)?1:0)
+      :(incursionsByRegion.get(node.id)||0);
+    const rows=[
+      ["Region",node.region||node.name],
+      ["Sicherheit",Number.isFinite(node.security)?Number(node.security).toFixed(1):"—"],
+      ["Killmails im Feed",selectedRegion?(killCounts.get(node.id)||0):(killCountsByRegion.get(node.id)||0)],
+      ["Incursion",incursionCount?(selectedRegion?"Ja":`${incursionCount} Systeme`):"Nein"]
+    ];
+    for(const [label,value] of rows){
+      const line=document.createElement("div");line.textContent=`${label}: ${value}`;systemDetails.append(line);
+    }
+    if(!selectedRegion){
+      const button=document.createElement("button");button.type="button";button.textContent=`Region ${node.name} öffnen`;
+      button.style.marginTop=".6rem";button.addEventListener("click",()=>selectRegion(node.name));systemDetails.append(button);
+    }else{
+      const link=document.createElement("a");link.href=`https://evemaps.dotlan.net/system/${encodeURIComponent(node.name)}`;
+      link.target="_blank";link.rel="noopener";link.textContent="Bei DOTLAN öffnen ↗";
+      link.style.display="inline-block";link.style.marginTop=".6rem";systemDetails.append(link);
+    }
     draw();
   }
-  function centerSystem(system){
-    const point=basePoints.get(system.id);if(!point)return;
-    scale=Math.max(scale,4);panX=-(point.x-canvas.clientWidth/2)*scale;panY=-(point.y-canvas.clientHeight/2)*scale;
-    updateDetails(system);
+  function selectRegion(name){
+    selectedRegion=name||"";regionSelect.value=selectedRegion;selected=null;
+    document.getElementById("map-global").classList.toggle("active",!selectedRegion);
+    updateDetails(null);layoutAndDraw();loadOverlay();
+  }
+  function centerNode(node){
+    if(!nodeById.has(node.id)){
+      if(node.region)selectRegion(node.region);
+      else return;
+    }
+    const p=nodeById.get(node.id);if(!p)return;
+    scale=Math.max(scale,2.4);panX=-(p.x-canvas.clientWidth/2)*scale;panY=-(p.y-canvas.clientHeight/2)*scale;
+    updateDetails(node);
+  }
+  function prepareData(raw){
+    data=raw;systemById=new Map(data.systems.map(s=>[s.id,s]));
+    for(const system of data.systems)systemLookup.set(system.name.toLowerCase(),system);
+    const centers=new Map(data.region_centers.map(r=>[
+      r.region_id,{...r,securityTotal:0,count:0,securityBands:{high:0,low:0,null:0}}
+    ]));
+    for(const system of data.systems){
+      const center=centers.get(system.region_id);
+      if(center&&Number.isFinite(system.security)){
+        center.securityTotal+=system.security;center.count++;
+        const band=system.security>=.5?"high":system.security>=.1?"low":"null";
+        center.securityBands[band]++;
+      }
+    }
+    data.region_centers=[...centers.values()].map(r=>({...r,security:r.count?r.securityTotal/r.count:null}));
+    data.connectionsByRegion=new Map();
+    const regionEdges=new Map();
+    for(const [a,b] of data.connections){
+      const from=systemById.get(a),to=systemById.get(b);
+      if(!from||!to||from.region_id===to.region_id)continue;
+      const key=[from.region_id,to.region_id].sort((x,y)=>x-y).join(":");
+      if(!regionEdges.has(key))regionEdges.set(key,{a:from.region_id,b:to.region_id});
+    }
+    data.connectionsByRegion=regionEdges;
+    const list=document.getElementById("system-list");
+    for(const system of data.systems){
+      const option=document.createElement("option");option.value=system.name;list.append(option);
+    }
+    for(const regionName of data.regions){
+      const option=document.createElement("option");option.value=regionName;option.textContent=regionName;regionSelect.append(option);
+    }
+    layoutAndDraw();
+    status.textContent="EVE-Sprungnetz · Regionsübersicht. Wähle eine Region für die lokale Systemkarte.";
+    loadOverlay();
   }
   async function loadOverlay(){
-    killsBySystem=new Map();incursionSystems=new Set();
-    if(filter==="kills"){
+    killCounts=new Map();killCountsByRegion=new Map();killRows=[];incursionSystems=new Set();incursionsByRegion=new Map();
+    if(filter==="kills"||filter==="all"||killboardOpen){
       status.textContent="Aktuelle Killmails werden geladen …";
       try{
-        const query=new URLSearchParams({regions:region,limit:"50"});
+        const query=new URLSearchParams({regions:selectedRegion,limit:"50"});
         const response=await fetch(`/api/kills?${query}`);if(!response.ok)throw new Error();
-        const kills=await response.json();
-        for(const kill of kills)if(kill.system_id)killsBySystem.set(kill.system_id,(killsBySystem.get(kill.system_id)||0)+1);
-        status.textContent=`Kill-Overlay: letzte ${kills.length} Killmails im ausgewählten Feed. Die Zahl ist kein Tagesgesamtwert.`;
-      }catch{status.textContent="Killdaten derzeit nicht erreichbar; die Basiskarte bleibt verfügbar.";}
-    }else if(filter==="incursions"){
-      status.textContent="Incursion-Systeme werden geladen …";
+        killRows=await response.json();
+        for(const kill of killRows){
+          const system=systemById.get(kill.system_id);if(!system)continue;
+          killCounts.set(kill.system_id,(killCounts.get(kill.system_id)||0)+1);
+          killCountsByRegion.set(system.region_id,(killCountsByRegion.get(system.region_id)||0)+1);
+        }
+        status.textContent=`${killRows.length} aktuelle Killmails im Feed · Overlay ist auf den jüngsten Feed begrenzt.`;
+        renderKillboard();
+        const latest=killRows[0];
+        document.getElementById("map-ticker").textContent=latest
+          ?`LIVE · ${latest.system} · ${latest.ship} · ${latest.victim} · ${(latest.value/1e6).toFixed(1)} Mio ISK`
+          :"LIVE · Keine Killmails im aktuellen Feed";
+      }catch{status.textContent="Killdaten nicht erreichbar; die Basiskarte bleibt verfügbar.";}
+    }
+    if(filter==="incursions"){
+      status.textContent="Aktuelle Incursions werden geladen …";
       try{
         const response=await fetch("/api/incursions");if(!response.ok)throw new Error();
         const incursions=await response.json();
-        for(const incursion of incursions)for(const system of incursion.infested||[])incursionSystems.add(system.id);
+        for(const incursion of incursions){
+          for(const system of incursion.infested||[]){
+            incursionSystems.add(system.id);
+            const mapped=systemById.get(system.id);
+            if(mapped)incursionsByRegion.set(mapped.region_id,(incursionsByRegion.get(mapped.region_id)||0)+1);
+          }
+        }
         status.textContent=`${incursionSystems.size} befallene Systeme in aktuellen Incursions.`;
-      }catch{status.textContent="Incursion-Daten derzeit nicht erreichbar; die Basiskarte bleibt verfügbar.";}
-    }else{
-      status.textContent="Kartendaten aus den EVE-System- und Sprungdaten. Interaktive Darstellung, keine DOTLAN-Grafik.";
+      }catch{status.textContent="Incursion-Daten nicht erreichbar; die Basiskarte bleibt verfügbar.";}
     }
     if(selected)updateDetails(selected);else draw();
+  }
+  function renderKillboard(){
+    const list=document.getElementById("kill-list");list.replaceChildren();
+    for(const kill of killRows.slice(0,12)){
+      const row=document.createElement("div");row.className="kill-item";
+      const left=document.createElement("span");left.textContent=`${kill.system} · ${kill.ship}`;
+      const value=document.createElement("strong");value.textContent=`${(kill.value/1e6).toFixed(1)}m`;
+      row.append(left,value);list.append(row);
+    }
+    document.getElementById("killboard-box").classList.toggle("open",killboardOpen);
   }
   async function loadMap(){
     try{
       const response=await fetch("/api/map");if(!response.ok)throw new Error();
-      data=await response.json();
-      for(const name of data.regions){const option=document.createElement("option");option.value=name;option.textContent=name;regionSelect.append(option);}
-      const list=document.getElementById("system-list");
-      for(const system of data.systems){const option=document.createElement("option");option.value=system.name;list.append(option);}
-      setView();resize();
-      status.textContent=data.systems.some(system=>!Number.isFinite(system.security))
-        ?"Karte aus EVE-Systemdaten geladen; Sicherheitsdaten fehlen im gespeicherten Kartencache. Aktualisiere die Kartendaten bei erreichbarem SDE."
-        :"Karte aus EVE-System- und Sprungdaten geladen. DOTLAN ist als externe Referenz verlinkt; die Karte wird eigenständig gezeichnet.";
+      prepareData(await response.json());resize();
     }catch{status.textContent="Kartendaten nicht erreichbar. Bitte später erneut versuchen.";}
   }
-  regionSelect.addEventListener("change",()=>{
-    region=regionSelect.value;selected=null;updateDetails(null);setView();
-    const link=document.getElementById("dotlan-reference");
-    link.href=region?`https://evemaps.dotlan.net/map/${encodeURIComponent(region)}`:"https://evemaps.dotlan.net/";
-    loadOverlay();
-  });
-  filterSelect.addEventListener("change",()=>{filter=filterSelect.value;loadOverlay();});
-  document.getElementById("map-search").addEventListener("change",event=>{
-    const system=data?.systems.find(s=>s.name.toLowerCase()===event.target.value.trim().toLowerCase());
-    if(!system){status.textContent="System nicht gefunden.";return;}
-    if(region&&system.region!==region){region=system.region;regionSelect.value=region;setView();}
-    centerSystem(system);
-  });
-  document.getElementById("map-zoom-in").addEventListener("click",()=>zoom(1.25));
-  document.getElementById("map-zoom-out").addEventListener("click",()=>zoom(1/1.25));
-  document.getElementById("map-reset").addEventListener("click",()=>{setView();updateDetails(null);});
   function zoom(factor,x=canvas.clientWidth/2,y=canvas.clientHeight/2){
-    const next=Math.max(.65,Math.min(32,scale*factor)),ratio=next/scale;
+    const next=Math.max(.55,Math.min(18,scale*factor)),ratio=next/scale;
     panX=x-canvas.clientWidth/2-(x-canvas.clientWidth/2-panX)*ratio;
     panY=y-canvas.clientHeight/2-(y-canvas.clientHeight/2-panY)*ratio;scale=next;draw();
   }
+  function findPath(start,end){
+    const adjacency=new Map();
+    for(const [a,b] of data.connections){
+      if(!adjacency.has(a))adjacency.set(a,[]);if(!adjacency.has(b))adjacency.set(b,[]);
+      adjacency.get(a).push(b);adjacency.get(b).push(a);
+    }
+    const queue=[start.id],previous=new Map([[start.id,null]]);
+    for(let i=0;i<queue.length;i++){
+      const current=queue[i];if(current===end.id)break;
+      for(const next of adjacency.get(current)||[])if(!previous.has(next)){previous.set(next,current);queue.push(next);}
+    }
+    if(!previous.has(end.id))return [];
+    const path=[];for(let id=end.id;id!==null;id=previous.get(id))path.push(systemById.get(id));
+    return path.reverse();
+  }
+  regionSelect.addEventListener("change",()=>selectRegion(regionSelect.value));
+  document.getElementById("map-global").addEventListener("click",()=>selectRegion(""));
+  filterSelect.addEventListener("change",()=>{filter=filterSelect.value;loadOverlay();});
+  document.getElementById("map-search").addEventListener("change",event=>{
+    const query=event.target.value.trim().toLowerCase();
+    const node=systemLookup.get(query)||data.region_centers.find(r=>r.name.toLowerCase()===query);
+    if(!node){status.textContent="System oder Region nicht gefunden.";return;}
+    if(node.is_region){
+      selectRegion(node.name);updateDetails(node);return;
+    }
+    if(selectedRegion!==node.region)selectRegion(node.region);
+    centerNode(node);
+  });
+  document.getElementById("map-reset").addEventListener("click",()=>{route=[];scale=1;panX=0;panY=0;selected=null;updateDetails(null);layoutAndDraw();});
+  document.getElementById("map-zoom-in").addEventListener("click",()=>zoom(1.25));
+  document.getElementById("map-zoom-out").addEventListener("click",()=>zoom(1/1.25));
+  document.getElementById("layer-jumps").addEventListener("change",event=>{showJumps=event.target.checked;draw();});
+  document.getElementById("layer-labels").addEventListener("change",event=>{showLabels=event.target.checked;draw();});
+  document.getElementById("layer-kills").addEventListener("change",event=>{showKills=event.target.checked;draw();});
+  document.getElementById("map-color").addEventListener("change",event=>{colorMode=event.target.value;draw();});
+  document.getElementById("tool-activity").addEventListener("click",()=>{filterSelect.value="kills";filter="kills";loadOverlay();});
+  document.getElementById("tool-killboard").addEventListener("click",()=>{
+    killboardOpen=!killboardOpen;document.getElementById("tool-killboard").classList.toggle("active",killboardOpen);
+    if(killboardOpen)loadOverlay();else renderKillboard();
+  });
+  document.getElementById("tool-route").addEventListener("click",()=>{
+    routeOpen=!routeOpen;document.getElementById("route-box").classList.toggle("open",routeOpen);
+    document.getElementById("tool-route").classList.toggle("active",routeOpen);
+  });
+  document.getElementById("route-calculate").addEventListener("click",()=>{
+    const start=systemLookup.get(document.getElementById("route-start").value.trim().toLowerCase());
+    const end=systemLookup.get(document.getElementById("route-end").value.trim().toLowerCase());
+    if(!start||!end){document.getElementById("route-result").textContent="Bitte gültigen Start und Ziel eingeben.";return;}
+    route=findPath(start,end);
+    if(!route.length){document.getElementById("route-result").textContent="Keine Sprungroute gefunden.";draw();return;}
+    document.getElementById("route-result").textContent=`${route.length-1} Sprünge · ${route[0].name} → ${route[route.length-1].name}`;
+    const sameRegion=start.region===end.region;
+    if(sameRegion&&selectedRegion!==start.region)selectRegion(start.region);
+    else if(!sameRegion&&selectedRegion)selectRegion("");
+    scale=Math.max(scale,1.35);draw();
+  });
+  document.getElementById("tool-view").addEventListener("click",()=>{
+    if(selectedRegion)selectRegion("");else {scale=1;panX=0;panY=0;layoutAndDraw();}
+  });
+  document.getElementById("tool-tools").addEventListener("click",()=>{
+    const box=document.querySelector(".map-tools-box");box.hidden=!box.hidden;
+    document.getElementById("tool-tools").classList.toggle("active",!box.hidden);
+  });
+  for(const id of ["tool-sovereignty","tool-force"]){
+    document.getElementById(id).addEventListener("click",()=>{status.textContent="Für diese Ansicht ist derzeit keine verlässliche Sov-/Force-Projection-Datenquelle eingebunden.";});
+  }
+  document.getElementById("map-live").addEventListener("change",event=>{
+    if(liveTimer)clearInterval(liveTimer);
+    if(event.target.checked)liveTimer=setInterval(()=>loadOverlay(),60000);
+  });
   canvas.addEventListener("pointerdown",event=>{
     if(event.button!==0)return;drag={x:event.clientX,y:event.clientY,panX,panY};
     canvas.setPointerCapture(event.pointerId);canvas.classList.add("dragging");
@@ -235,24 +530,22 @@
   canvas.addEventListener("pointermove",event=>{
     if(!drag)return;panX=drag.panX+event.clientX-drag.x;panY=drag.panY+event.clientY-drag.y;draw();
   });
-  function stopDrag(event){
+  canvas.addEventListener("pointerup",event=>{
     if(!drag)return;
-    const moved=Math.hypot(event.clientX-drag.x,event.clientY-drag.y);
-    drag=null;canvas.classList.remove("dragging");
+    const moved=Math.hypot(event.clientX-drag.x,event.clientY-drag.y);drag=null;canvas.classList.remove("dragging");
     if(moved>5)return;
     const rect=canvas.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
-    let nearest=null,distance=14;
-    for(const system of visibleSystems){
-      const p=basePoints.get(system.id);if(!p)continue;
-      const screen=screenPoint(p),d=Math.hypot(screen.x-x,screen.y-y);
-      if(d<distance){nearest=system;distance=d;}
-    }
-    if(nearest)updateDetails(nearest);
-  }
-  canvas.addEventListener("pointerup",stopDrag);canvas.addEventListener("pointercancel",()=>{drag=null;canvas.classList.remove("dragging");});
+    let nearest=null,distance=18;
+    for(const node of visibleNodes){if(!allowedNode(node))continue;const p=pointFor(node.id);if(!p)continue;const d=Math.hypot(p.x-x,p.y-y);if(d<distance){nearest=node;distance=d;}}
+    if(!nearest)return;
+    if(!selectedRegion){selectRegion(nearest.name);return;}
+    updateDetails(nearest);
+  });
+  canvas.addEventListener("pointercancel",()=>{drag=null;canvas.classList.remove("dragging");});
   canvas.addEventListener("wheel",event=>{event.preventDefault();const rect=canvas.getBoundingClientRect();zoom(event.deltaY<0?1.12:1/1.12,event.clientX-rect.left,event.clientY-rect.top);},{passive:false});
   new ResizeObserver(resize).observe(canvas);
   loadMap();
+  liveTimer=setInterval(()=>{if(document.getElementById("map-live").checked)loadOverlay();},60000);
 })();
 </script>
 {% endblock %}
