@@ -227,7 +227,7 @@
     const killCount=killCounts.get(node.id)||0;
     const incursion=incursionSystems.has(node.id);
     const base=colorMode==="region"?regionColor(node.region):colorForSecurity(node.security);
-    const radius=global?Math.min(6,1.1+Math.log2(killCount+1)*1.1):Math.min(7,3+Math.log2(killCount+1));
+    const radius=global?Math.min(6,1.1+Math.log2(killCount+1)*1.1)+Math.min(5,Math.max(0,Math.log2(scale))*.9):Math.min(7,3+Math.log2(killCount+1));
     if(selected&&selected.id===node.id){
       ctx.beginPath();ctx.arc(point.x,point.y,radius+8,0,Math.PI*2);ctx.strokeStyle="rgba(104,218,237,.85)";ctx.lineWidth=1.5;ctx.stroke();
     }
@@ -258,24 +258,20 @@
   }
   function drawSystemLabels(){
     if(selectedRegion||!showLabels||scale<=1.7)return;
-    const occupied=new Set();
-    ctx.font="600 9px system-ui";ctx.textAlign="center";ctx.fillStyle="#e5e9f1";
+    const size=Math.min(15,8+Math.log2(scale)*1.4);
+    const boxes=[];
+    ctx.font=`600 ${size}px system-ui`;ctx.textAlign="center";ctx.fillStyle="#e5e9f1";
     ctx.shadowColor="#05060c";ctx.shadowBlur=5;
-    for(const node of visibleNodes){
-      if(!allowedNode(node))continue;
+    const offset=Math.min(5,Math.max(0,Math.log2(scale))*.9)+size+1;
+    const list=visibleNodes.filter(allowedNode).sort((a,b)=>(killCounts.get(b.id)||0)-(killCounts.get(a.id)||0));
+    for(const node of list){
       const point=pointFor(node.id);
-      if(!point||point.x<0||point.x>canvas.clientWidth||point.y<0||point.y>canvas.clientHeight)continue;
-      const label=node.name.toUpperCase(),width=ctx.measureText(label).width+14;
-      const columns=Math.max(1,Math.ceil(width/72)),cellX=Math.floor(point.x/72),cellY=Math.floor(point.y/24);
-      let collision=false;
-      for(let x=cellX-Math.ceil(columns/2);x<=cellX+Math.ceil(columns/2)&&!collision;x++){
-        for(let y=cellY-1;y<=cellY+1;y++)if(occupied.has(`${x}:${y}`)){collision=true;break;}
-      }
-      if(collision)continue;
-      for(let x=cellX-Math.ceil(columns/2);x<=cellX+Math.ceil(columns/2);x++){
-        for(let y=cellY-1;y<=cellY+1;y++)occupied.add(`${x}:${y}`);
-      }
-      ctx.fillText(label,point.x,point.y+11);
+      if(!point||point.x<-40||point.x>canvas.clientWidth+40||point.y<0||point.y>canvas.clientHeight)continue;
+      const label=node.name.toUpperCase(),half=ctx.measureText(label).width/2+3;
+      const box=[point.x-half,point.y+offset-size-1,point.x+half,point.y+offset+3];
+      if(boxes.some(o=>box[0]<o[2]&&box[2]>o[0]&&box[1]<o[3]&&box[3]>o[1]))continue;
+      boxes.push(box);
+      ctx.fillText(label,point.x,point.y+offset);
     }
     ctx.shadowBlur=0;
   }
@@ -490,7 +486,7 @@
     }catch{status.textContent="Kartendaten nicht erreichbar. Bitte später erneut versuchen.";}
   }
   function zoom(factor,x=canvas.clientWidth/2,y=canvas.clientHeight/2){
-    const next=Math.max(.55,Math.min(18,scale*factor)),ratio=next/scale;
+    const next=Math.max(.55,Math.min(80,scale*factor)),ratio=next/scale;
     panX=x-canvas.clientWidth/2-(x-canvas.clientWidth/2-panX)*ratio;
     panY=y-canvas.clientHeight/2-(y-canvas.clientHeight/2-panY)*ratio;scale=next;draw();
   }
