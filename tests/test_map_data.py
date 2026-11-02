@@ -25,6 +25,14 @@ class MapDataTests(unittest.TestCase):
                     "z": "22",
                     "security": "0.4",
                 },
+                {
+                    "solarSystemID": "31000001",
+                    "solarSystemName": "J000001",
+                    "regionID": "11000001",
+                    "x": "9000000",
+                    "z": "9000000",
+                    "security": "-0.99",
+                },
             ],
             "mapSolarSystemJumps.csv": [
                 {"fromSolarSystemID": "30000001", "toSolarSystemID": "30000002"}
@@ -39,6 +47,7 @@ class MapDataTests(unittest.TestCase):
             result = asyncio.run(_download())
 
         self.assertEqual(len(result["systems"]), 2)
+        self.assertNotIn(31000001, [system["id"] for system in result["systems"]])
         self.assertEqual(result["systems"][0]["security"], 0.9)
         self.assertEqual(result["systems"][1]["x"], 12.0)
         self.assertEqual(result["systems"][0]["y"], 20.0)
