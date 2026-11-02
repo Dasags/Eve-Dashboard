@@ -2,17 +2,17 @@
 {% block title %}{{ app_name }} – Übersicht{% endblock %}
 {% block head %}
 <style>
-  .overview-layout { display:grid; grid-template-columns:minmax(290px,360px) minmax(0,1fr); gap:1rem; align-items:start; }
+  .overview-layout { display:grid; grid-template-columns:minmax(360px,430px) minmax(0,1fr); gap:1rem; align-items:start; }
   .overview-sidebar { display:grid; gap:1rem; min-width:0; }
   .clock-panel { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
   .clock-value { margin-top:.25rem; font-size:1.55rem; font-variant-numeric:tabular-nums; }
   .pilot-list { display:grid; gap:.65rem; }
-  .pilot-card { padding:.85rem; border:1px solid #283951; border-radius:.7rem; background:linear-gradient(135deg,rgb(17 30 49 / 92%),rgb(9 17 30 / 92%)); }
-  .pilot-top { display:flex; align-items:center; gap:.7rem; }
-  .pilot-top img { width:42px; height:42px; border-radius:.55rem; background:#101a29; }
-  .pilot-data { display:grid; grid-template-columns:1fr 1fr; gap:.55rem; margin-top:.7rem; }
-  .pilot-data > div { min-width:0; padding:.45rem; border-radius:.45rem; background:rgb(4 10 18 / 52%); }
-  .pilot-data strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.84rem; }
+  .pilot-card { padding:1.05rem; border:1px solid #283951; border-radius:.7rem; background:linear-gradient(135deg,rgb(17 30 49 / 92%),rgb(9 17 30 / 92%)); }
+  .pilot-top { display:flex; align-items:center; gap:.85rem; min-height:58px; }
+  .pilot-top img { width:56px; height:56px; border-radius:.6rem; background:#101a29; }
+  .pilot-data { display:grid; grid-template-columns:1fr 1fr; gap:.65rem; margin-top:.85rem; }
+  .pilot-data > div { min-width:0; min-height:62px; padding:.6rem; border-radius:.45rem; background:rgb(4 10 18 / 52%); }
+  .pilot-data strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.9rem; }
   .pilot-data small { display:block; margin-bottom:.2rem; color:#8095af; font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; }
   .feed-panel { min-width:0; min-height:calc(100vh - 105px); }
   .feed-head { display:flex; justify-content:space-between; align-items:center; gap:1rem; }

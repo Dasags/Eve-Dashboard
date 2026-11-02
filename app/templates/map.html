@@ -167,10 +167,11 @@
       visibleNodes=data.systems.filter(s=>s.region===selectedRegion);
       nodeById=mapLayout(visibleNodes,width,height);
     }else{
-      visibleNodes=data.region_centers.map(r=>({
-        ...r,id:r.region_id,name:r.name,region:r.name,security:r.security,is_region:true
+      visibleNodes=data.systems;
+      const regionLabels=data.region_centers.map(r=>({
+        ...r,id:r.region_id,name:r.name,region:r.name,is_region:true
       }));
-      nodeById=mapLayout(visibleNodes,width,height);
+      nodeById=mapLayout([...visibleNodes,...regionLabels],width,height);
     }
   }
   function pointFor(id){
@@ -199,29 +200,21 @@
     }
   }
   function allowedNode(node){
-    if(selectedRegion){
-      if(filter==="high")return Number.isFinite(node.security)&&node.security>=.5;
-      if(filter==="low")return Number.isFinite(node.security)&&node.security>=.1&&node.security<.5;
-      if(filter==="null")return Number.isFinite(node.security)&&node.security<.1;
-      if(filter==="kills")return (killCounts.get(node.id)||0)>0;
-      if(filter==="incursions")return incursionSystems.has(node.id);
-      return true;
-    }
-    if(filter==="kills")return (killCountsByRegion.get(node.id)||0)>0;
-    if(filter==="incursions")return (incursionsByRegion.get(node.id)||0)>0;
-    if(filter==="high")return node.securityBands?.high>0;
-    if(filter==="low")return node.securityBands?.low>0;
-    if(filter==="null")return node.securityBands?.null>0;
+    if(filter==="high")return Number.isFinite(node.security)&&node.security>=.5;
+    if(filter==="low")return Number.isFinite(node.security)&&node.security>=.1&&node.security<.5;
+    if(filter==="null")return Number.isFinite(node.security)&&node.security<.1;
+    if(filter==="kills")return (killCounts.get(node.id)||0)>0;
+    if(filter==="incursions")return incursionSystems.has(node.id);
     return true;
   }
   let killCountsByRegion=new Map(),incursionsByRegion=new Map();
   function drawNode(node,point){
     const global=!selectedRegion;
-    const killCount=global?(killCountsByRegion.get(node.id)||0):(killCounts.get(node.id)||0);
-    const incursion=global?(incursionsByRegion.get(node.id)||0):(incursionSystems.has(node.id)?1:0);
-    const base=colorMode==="region"&&global?regionColor(node.name):colorForSecurity(node.security);
-    const radius=global?Math.min(11,5+Math.log2(killCount+1)*1.5):Math.min(7,3+Math.log2(killCount+1));
-    if(selected&&(selected.id===node.id||(!global&&selected.region===node.region))){
+    const killCount=killCounts.get(node.id)||0;
+    const incursion=incursionSystems.has(node.id);
+    const base=colorMode==="region"?regionColor(node.region):colorForSecurity(node.security);
+    const radius=global?Math.min(5,1.2+Math.log2(killCount+1)*1.1):Math.min(7,3+Math.log2(killCount+1));
+    if(selected&&selected.id===node.id){
       ctx.beginPath();ctx.arc(point.x,point.y,radius+8,0,Math.PI*2);ctx.strokeStyle="rgba(104,218,237,.85)";ctx.lineWidth=1.5;ctx.stroke();
     }
     if(killCount&&showKills){
@@ -229,24 +222,57 @@
     }
     ctx.beginPath();
     if(global){
-      ctx.rect(point.x-radius,point.y-radius,radius*2,radius*2);
+      ctx.arc(point.x,point.y,radius,0,Math.PI*2);
       ctx.fillStyle=killCount&&showKills?"#e54f76":incursion?"#b881f2":base;ctx.fill();
-      ctx.strokeStyle="#d6b1f4";ctx.lineWidth=1;ctx.stroke();
+      if(killCount||incursion){ctx.strokeStyle=killCount?"#ff9baf":"#dfc4ff";ctx.lineWidth=1;ctx.stroke();}
     }else{
       ctx.arc(point.x,point.y,radius,0,Math.PI*2);
       ctx.fillStyle=killCount&&showKills?"#ff536f":incursion?"#c28aff":base;ctx.fill();
       ctx.strokeStyle=Number.isFinite(node.security)&&node.security>=.5?"#a4edff":"#e6b9dc";ctx.lineWidth=1.1;ctx.stroke();
     }
-    if(showLabels&&(global||scale>1.05||visibleNodes.length<150)){
-      const label=global?node.name:node.name.toUpperCase();
-      ctx.font=`${global?"600 10px":"600 9px"} system-ui`;
-      ctx.textAlign="center";ctx.fillStyle=global?"#ccd5e5":"#e5e9f1";
+    if(showLabels&&!global){
+      const label=node.name.toUpperCase();
+      ctx.font="600 9px system-ui";
+      ctx.textAlign="center";ctx.fillStyle="#e5e9f1";
       ctx.shadowColor="#05060c";ctx.shadowBlur=5;ctx.fillText(label,point.x,point.y+radius+13);ctx.shadowBlur=0;
     }
     if(killCount&&showKills){
       ctx.font="600 9px system-ui";ctx.textAlign="center";ctx.fillStyle="#ff687b";
       ctx.fillText(`Kills ${killCount}`,point.x,point.y-radius-8);
     }
+  }
+  function drawSystemLabels(){
+    if(selectedRegion||!showLabels||scale<=1.7)return;
+    const occupied=new Set();
+    ctx.font="600 9px system-ui";ctx.textAlign="center";ctx.fillStyle="#e5e9f1";
+    ctx.shadowColor="#05060c";ctx.shadowBlur=5;
+    for(const node of visibleNodes){
+      if(!allowedNode(node))continue;
+      const point=pointFor(node.id);
+      if(!point||point.x<0||point.x>canvas.clientWidth||point.y<0||point.y>canvas.clientHeight)continue;
+      const label=node.name.toUpperCase(),width=ctx.measureText(label).width+14;
+      const columns=Math.max(1,Math.ceil(width/72)),cellX=Math.floor(point.x/72),cellY=Math.floor(point.y/24);
+      let collision=false;
+      for(let x=cellX-Math.ceil(columns/2);x<=cellX+Math.ceil(columns/2)&&!collision;x++){
+        for(let y=cellY-1;y<=cellY+1;y++)if(occupied.has(`${x}:${y}`)){collision=true;break;}
+      }
+      if(collision)continue;
+      for(let x=cellX-Math.ceil(columns/2);x<=cellX+Math.ceil(columns/2);x++){
+        for(let y=cellY-1;y<=cellY+1;y++)occupied.add(`${x}:${y}`);
+      }
+      ctx.fillText(label,point.x,point.y+11);
+    }
+    ctx.shadowBlur=0;
+  }
+  function drawRegionLabels(){
+    if(selectedRegion||!showLabels||scale>1.7)return;
+    ctx.textAlign="center";ctx.font="600 10px system-ui";
+    for(const region of data.region_centers){
+      const point=pointFor(region.region_id);if(!point)continue;
+      ctx.fillStyle="rgba(202,211,226,.7)";ctx.shadowColor="#05060c";ctx.shadowBlur=5;
+      ctx.fillText(region.name.toUpperCase(),point.x,point.y);
+    }
+    ctx.shadowBlur=0;
   }
   function draw(){
     if(!data||!visibleNodes.length)return;
@@ -255,7 +281,7 @@
     const validIds=new Set(visibleNodes.filter(allowedNode).map(n=>n.id));
     if(showJumps){
       ctx.beginPath();ctx.strokeStyle="rgba(157,171,193,.25)";ctx.lineWidth=.85;
-      const edges=isGlobal?[...data.connectionsByRegion.values()].map(e=>[e.a,e.b]):data.connections;
+      const edges=data.connections;
       for(const [a,b] of edges){
         if(!validIds.has(a)||!validIds.has(b))continue;
         const p=pointFor(a),q=pointFor(b);if(!p||!q)continue;
@@ -267,7 +293,7 @@
       ctx.beginPath();ctx.strokeStyle="#5ce4c5";ctx.lineWidth=3;
       const routeNodes=selectedRegion
         ?route.filter(n=>n.region===selectedRegion)
-        :[...new Map(route.map(n=>[n.region_id,{id:n.region_id,region_id:n.region_id}])).values()];
+        :route;
       for(let i=0;i<routeNodes.length-1;i++){
         const a=pointFor(routeNodes[i].id),b=pointFor(routeNodes[i+1].id);
         if(a&&b){ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}
@@ -280,8 +306,10 @@
       const point=pointFor(node.id);if(!point)continue;
       drawNode(node,point);count++;
     }
+    drawSystemLabels();
+    drawRegionLabels();
     countLabel.textContent=isGlobal
-      ?`${count.toLocaleString("de-DE")} Regionen · ${data.systems.length.toLocaleString("de-DE")} Systeme`
+      ?`${count.toLocaleString("de-DE")} Systeme · ${data.region_centers.length.toLocaleString("de-DE")} Regionen`
       :`${count.toLocaleString("de-DE")} Systeme · ${data.connections.filter(([a,b])=>nodeById.has(a)&&nodeById.has(b)).length.toLocaleString("de-DE")} Sprünge`;
   }
   function layoutAndDraw(){prepareNodes();draw();}
@@ -294,30 +322,35 @@
     if(!node){systemName.textContent=selectedRegion||"New Eden";systemDetails.textContent="Klicke auf ein System oder suche nach einem Namen.";draw();return;}
     systemName.textContent=node.name;
     systemDetails.replaceChildren();
-    const incursionCount=selectedRegion
-      ?(incursionSystems.has(node.id)?1:0)
-      :(incursionsByRegion.get(node.id)||0);
+    const isRegion=Boolean(node.is_region);
+    const incursionCount=isRegion
+      ?(incursionsByRegion.get(node.id)||0)
+      :(incursionSystems.has(node.id)?1:0);
     const rows=[
       ["Region",node.region||node.name],
       ["Sicherheit",Number.isFinite(node.security)?Number(node.security).toFixed(1):"—"],
-      ["Killmails im Feed",selectedRegion?(killCounts.get(node.id)||0):(killCountsByRegion.get(node.id)||0)],
-      ["Incursion",incursionCount?(selectedRegion?"Ja":`${incursionCount} Systeme`):"Nein"]
+      ["Killmails im Feed",isRegion?(killCountsByRegion.get(node.id)||0):(killCounts.get(node.id)||0)],
+      ["Incursion",incursionCount?(isRegion?`${incursionCount} Systeme`:"Ja"):"Nein"]
     ];
     for(const [label,value] of rows){
       const line=document.createElement("div");line.textContent=`${label}: ${value}`;systemDetails.append(line);
     }
-    if(!selectedRegion){
+    if(isRegion){
       const button=document.createElement("button");button.type="button";button.textContent=`Region ${node.name} öffnen`;
       button.style.marginTop=".6rem";button.addEventListener("click",()=>selectRegion(node.name));systemDetails.append(button);
     }else{
       const link=document.createElement("a");link.href=`https://evemaps.dotlan.net/system/${encodeURIComponent(node.name)}`;
       link.target="_blank";link.rel="noopener";link.textContent="Bei DOTLAN öffnen ↗";
       link.style.display="inline-block";link.style.marginTop=".6rem";systemDetails.append(link);
+      if(!selectedRegion){
+        const button=document.createElement("button");button.type="button";button.textContent=`Region ${node.region} öffnen`;
+        button.style.display="block";button.style.marginTop=".6rem";button.addEventListener("click",()=>selectRegion(node.region));systemDetails.append(button);
+      }
     }
     draw();
   }
   function selectRegion(name){
-    selectedRegion=name||"";regionSelect.value=selectedRegion;selected=null;
+    selectedRegion=name||"";regionSelect.value=selectedRegion;selected=null;scale=1;panX=0;panY=0;
     document.getElementById("map-global").classList.toggle("active",!selectedRegion);
     updateDetails(null);layoutAndDraw();loadOverlay();
   }
@@ -344,7 +377,9 @@
         center.securityBands[band]++;
       }
     }
-    data.region_centers=[...centers.values()].map(r=>({...r,security:r.count?r.securityTotal/r.count:null}));
+    data.region_centers=[...centers.values()].map(r=>({
+      ...r,security:r.count?r.securityTotal/r.count:null,is_region:true
+    }));
     data.connectionsByRegion=new Map();
     const regionEdges=new Map();
     for(const [a,b] of data.connections){
@@ -449,7 +484,7 @@
     if(node.is_region){
       selectRegion(node.name);updateDetails(node);return;
     }
-    if(selectedRegion!==node.region)selectRegion(node.region);
+    if(selectedRegion&&selectedRegion!==node.region)selectRegion(node.region);
     centerNode(node);
   });
   document.getElementById("map-reset").addEventListener("click",()=>{route=[];scale=1;panX=0;panY=0;selected=null;updateDetails(null);layoutAndDraw();});
@@ -509,7 +544,6 @@
     let nearest=null,distance=18;
     for(const node of visibleNodes){if(!allowedNode(node))continue;const p=pointFor(node.id);if(!p)continue;const d=Math.hypot(p.x-x,p.y-y);if(d<distance){nearest=node;distance=d;}}
     if(!nearest)return;
-    if(!selectedRegion){selectRegion(nearest.name);return;}
     updateDetails(nearest);
   });
   canvas.addEventListener("pointercancel",()=>{drag=null;canvas.classList.remove("dragging");});
