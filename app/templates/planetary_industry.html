@@ -5,7 +5,23 @@
 <form method="post" action="/planetary-industry/calculate">
   <section class="panel">
     <div class="form-grid">
-      <label>PI-Produkt<input name="product_name" required value="{{ form_data.product_name or '' }}" placeholder="z. B. Robotics"></label>
+      <div style="grid-column:1/-1">
+        <div class="eyebrow">PI-Produkt</div>
+        <input type="hidden" name="product_name" id="pi-product" required value="{{ form_data.product_name or '' }}">
+        {% if products %}
+        <input type="search" id="pi-search" placeholder="Produkt suchen…" autocomplete="off" style="margin:.5rem 0">
+        <div class="toolbar" id="pi-tiers" style="margin-bottom:.5rem">
+          <button type="button" class="primary" data-tier="">Alle</button>
+          {% for t in [1,2,3,4] %}<button type="button" data-tier="{{ t }}">P{{ t }}</button>{% endfor %}
+          <span class="hint" id="pi-count"></span>
+        </div>
+        <div id="pi-list" style="max-height:280px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:.3rem">
+          {% for p in products %}<button type="button" class="pi-item" data-name="{{ p.name }}" data-tier="{{ p.tier }}" style="text-align:left"><strong>P{{ p.tier }}</strong> {{ p.name }}</button>{% endfor %}
+        </div>
+        <p class="hint">Ausgewählt: <strong id="pi-selected">{{ form_data.product_name or "—" }}</strong></p>
+        {% else %}<p class="notice">Produktliste nicht verfügbar (SDE nicht erreichbar). Name direkt eingeben:</p>
+        <input id="pi-fallback" placeholder="z. B. Robotics" value="{{ form_data.product_name or '' }}" oninput="document.getElementById('pi-product').value=this.value">{% endif %}
+      </div>
       <label>Menge (Stück)<input type="number" name="quantity" min="1" max="1000000" value="{{ form_data.quantity or 1 }}" required></label>
       <label>Einkaufsstufe<select name="buy_level">{% for level,name in [(0,"P0"),(1,"P1"),(2,"P2"),(3,"P3")] %}<option value="{{ level }}" {% if form_data.get("buy_level",1)|int == level %}selected{% endif %}>{{ name }} einkaufen</option>{% endfor %}</select></label>
     </div>
@@ -15,6 +31,41 @@
     <div class="form-actions"><button class="primary">Produktionskette berechnen</button></div>
   </section>
 </form>
+<script>
+(() => {
+  const list = document.getElementById("pi-list");
+  if (!list) return;
+  const hidden = document.getElementById("pi-product"), label = document.getElementById("pi-selected");
+  const search = document.getElementById("pi-search"), count = document.getElementById("pi-count");
+  const tierButtons = [...document.querySelectorAll("#pi-tiers [data-tier]")];
+  let tier = "";
+  const refresh = () => {
+    let shown = 0;
+    list.querySelectorAll(".pi-item").forEach(el => {
+      const ok = (!tier || el.dataset.tier === tier) && el.dataset.name.toLowerCase().includes(search.value.trim().toLowerCase());
+      el.style.display = ok ? "" : "none";
+      el.classList.toggle("primary", el.dataset.name === hidden.value);
+      if (ok) shown++;
+    });
+    count.textContent = shown + " Produkte";
+  };
+  list.addEventListener("click", e => {
+    const el = e.target.closest(".pi-item");
+    if (!el) return;
+    hidden.value = el.dataset.name; label.textContent = el.dataset.name; refresh();
+  });
+  tierButtons.forEach(b => b.addEventListener("click", () => {
+    tier = b.dataset.tier;
+    tierButtons.forEach(x => x.classList.toggle("primary", x === b));
+    refresh();
+  }));
+  search.addEventListener("input", refresh);
+  document.querySelector("form[action='/planetary-industry/calculate']").addEventListener("submit", e => {
+    if (!hidden.value) { e.preventDefault(); alert("Bitte ein Produkt auswählen."); }
+  });
+  refresh();
+})();
+</script>
 {% if result %}
   {% set plan = result.plan %}{% set analysis = result.analysis %}{% set best = analysis.best %}
   {% if plan.materials|selectattr("tier","equalto",none)|list %}<p class="notice">Für mindestens ein SDE-Item konnte die PI-Stufe nicht bestimmt werden.</p>{% endif %}
@@ -55,12 +106,12 @@
 
   <section class="panel" style="margin-top:1rem">
     <h2>Was ist zu produzieren? (nach Stufe)</h2>
-    <p class="hint">Preisbasis: {{ best.location.name if best else "erster gewählter Standort" }}. Marge = Gewinn auf Einsatzkosten der Eingangsmaterialien.</p>
+    <p class="hint">Preisbasis: {{ best.location.name if best else "erster gewählter Standort" }}. Komplette Kette P4→P0. Marge = Gewinn auf Einsatzkosten der Eingangsmaterialien. Items innerhalb der gewählten Einkaufsstufe sind als „Kaufen“ markiert, zeigen aber trotzdem Menge und Dauer für die Eigenproduktion.</p>
     {% for group in analysis.tier_groups %}
     <h3>{{ "P" ~ group.tier if group.tier >= 0 else "Stufe unbekannt" }} · {{ group.rows|length }} Item{{ "s" if group.rows|length != 1 }}</h3>
     <div class="table-wrap"><table><thead><tr><th>Item</th><th>Aktion</th><th>Menge</th><th>Zyklen</th><th>Dauer</th><th>Verkaufswert</th><th>Einsatzkosten</th><th>Gewinn</th><th>Marge</th></tr></thead><tbody>
       {% for r in group.rows %}<tr>
-        <td>{{ r.name }}</td><td>{{ "Herstellen" if r.kind == "Herstellen" else "Kaufen" }}</td><td>{{ r.quantity }}</td>
+        <td>{{ r.name }}</td><td>{{ "Kaufen" if r.kind == "Kaufen" else ("Kaufen (alternativ herstellen)" if r.bought else "Herstellen") }}</td><td>{{ r.quantity }}</td>
         <td>{{ r.cycles if r.cycles else "—" }}</td><td>{{ r.seconds|duration if r.seconds else "—" }}</td>
         <td>{{ r.sell|isk if r.sell is not none else "—" }}</td><td>{{ r.cost|isk if r.cost is not none else "—" }}</td>
         <td style="color:{{ '#3ddc97' if r.profit is not none and r.profit >= 0 else '#ff6b7a' }}">{{ r.profit|isk if r.profit is not none else "—" }}</td>

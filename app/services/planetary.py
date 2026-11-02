@@ -222,8 +222,9 @@ def analyze(plan: dict, locations: list[dict], recipes: dict, raw_plan: dict) ->
         return basis.get(type_id, {}).get("lowest_sell")
 
     merged: dict[int, dict] = {}
-    for row in plan["tree"]:
-        current = merged.setdefault(row["type_id"], {**row, "quantity": 0, "cycles": 0})
+    for row in raw_plan["tree"]:
+        current = merged.setdefault(row["type_id"], {**row, "quantity": 0, "cycles": 0, "seconds": 0})
+        current["seconds"] += row["seconds"]
         current["quantity"] += row["quantity"]
         current["cycles"] += row["cycles"]
     tier_groups: dict[int, list[dict]] = {}
@@ -243,6 +244,7 @@ def analyze(plan: dict, locations: list[dict], recipes: dict, raw_plan: dict) ->
             {
                 "name": row["name"],
                 "kind": row["kind"],
+                "bought": row["tier"] is not None and 0 < row["tier"] <= plan["buy_level"],
                 "quantity": row["quantity"],
                 "cycles": row["cycles"],
                 "seconds": row["seconds"],
@@ -308,3 +310,28 @@ def analyze(plan: dict, locations: list[dict], recipes: dict, raw_plan: dict) ->
             else None
         ),
     }
+
+
+def product_catalog(recipes: dict[int, dict], types: dict[int, dict]) -> list[dict]:
+    """All producible PI items with their tier, derived from the recipe structure."""
+    cache: dict[int, int] = {}
+
+    def tier(type_id: int, trail: frozenset = frozenset()) -> int:
+        if type_id in cache:
+            return cache[type_id]
+        recipe = recipes.get(type_id)
+        if recipe is None or type_id in trail or not recipe["materials"]:
+            return 0
+        value = 1 + max(tier(m["type_id"], trail | {type_id}) for m in recipe["materials"])
+        cache[type_id] = value
+        return value
+
+    products = [
+        {
+            "name": field(types.get(type_id, {}), "typeName", "type_name", default=f"Item {type_id}"),
+            "tier": tier(type_id),
+        }
+        for type_id in recipes
+        if type_id in types
+    ]
+    return sorted(products, key=lambda row: (row["tier"], row["name"]))
