@@ -810,6 +810,8 @@ def create_wallet_entry(
     amount: float = Form(...),
     entry_date: str = Form(...),
     label_id: int | None = Form(None),
+    corp_tax: str | None = Form(None),
+    corp_tax_percent: float | None = Form(None),
 ):
     account_id, character_id = require_account(request)
     require_module(request, "wallet")
@@ -817,6 +819,18 @@ def create_wallet_entry(
         raise HTTPException(400, "Eintragstyp oder Beschreibung ist ungültig.")
     if not math.isfinite(amount) or amount <= 0 or amount > 1e15:
         raise HTTPException(400, "Betrag muss größer als 0 sein.")
+    description = description.strip()
+    if kind == "income" and corp_tax:
+        if (
+            corp_tax_percent is None
+            or not math.isfinite(corp_tax_percent)
+            or not 0 <= corp_tax_percent < 100
+        ):
+            raise HTTPException(400, "Corp-Steuer muss zwischen 0 und unter 100 % liegen.")
+        amount = round(amount * (1 - corp_tax_percent / 100), 2)
+        if amount <= 0:
+            raise HTTPException(400, "Betrag nach Corp-Steuer muss größer als 0 sein.")
+        description = f"{description[:90]} (nach {corp_tax_percent:g} % Corp-Steuer)"
     try:
         date.fromisoformat(entry_date)
         storage.add_wallet_entry(
@@ -824,7 +838,7 @@ def create_wallet_entry(
             character_id,
             kind,
             label_id if kind == "expense" else None,
-            description.strip(),
+            description,
             amount,
             entry_date,
         )
