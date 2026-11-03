@@ -60,8 +60,7 @@
   <section class="panel"><h2>Eingänge</h2><p class="hint">Werden zum Start-Kontostand addiert.</p>
     <form method="post" action="/wallet/plan/entries">
       <input type="hidden" name="kind" value="income">
-      <label>Datum<input type="date" name="entry_date" required></label>
-      <label style="margin-top:.6rem">Beschreibung<input name="description" maxlength="120" required></label>
+      <label>Beschreibung<input name="description" maxlength="120" required></label>
       <label style="margin-top:.6rem">Betrag (ISK)<input type="number" name="amount" min=".01" step=".01" required></label>
       <div style="display:flex;align-items:center;gap:.6rem;margin-top:.6rem">
         <label style="display:flex;align-items:center;gap:.4rem;grid-auto-flow:column"><input type="checkbox" name="corp_tax" value="1" id="corp-tax-toggle" onchange="document.getElementById('corp-tax-pct').disabled=!this.checked">Corp-Steuer abziehen</label>
@@ -74,8 +73,7 @@
   <section class="panel"><h2>Ausgaben</h2><p class="hint">Werden von der gewählten Beschriftung abgezogen.</p>
     <form method="post" action="/wallet/plan/entries">
       <input type="hidden" name="kind" value="expense">
-      <label>Datum<input type="date" name="entry_date" required></label>
-      <label style="margin-top:.6rem">Beschreibung<input name="description" maxlength="120" required></label>
+      <label>Beschreibung<input name="description" maxlength="120" required></label>
       <label style="margin-top:.6rem">Betrag (ISK)<input type="number" name="amount" min=".01" step=".01" required></label>
       <label style="margin-top:.6rem">Beschriftung<select name="label_id"><option value="">Ohne Zuordnung</option>{% for label in plan.labels %}<option value="{{ label.id }}">{{ label.name }}</option>{% endfor %}</select></label>
       <div class="form-actions"><button class="primary">Ausgabe hinzufügen</button></div>
