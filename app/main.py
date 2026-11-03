@@ -809,7 +809,7 @@ def create_wallet_entry(
     kind: str = Form(...),
     description: str = Form(...),
     amount: float = Form(...),
-    entry_date: str = Form(...),
+    entry_date: str | None = Form(None),
     label_id: int | None = Form(None),
     corp_tax: str | None = Form(None),
     corp_tax_percent: float | None = Form(None),
@@ -820,6 +820,7 @@ def create_wallet_entry(
         raise HTTPException(400, "Eintragstyp oder Beschreibung ist ungültig.")
     if not math.isfinite(amount) or amount <= 0 or amount > 1e15:
         raise HTTPException(400, "Betrag muss größer als 0 sein.")
+    entry_date = (entry_date or "").strip() or date.today().isoformat()
     description = description.strip()
     if kind == "income" and corp_tax:
         if (
