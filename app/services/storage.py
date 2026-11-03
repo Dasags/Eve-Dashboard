@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -37,7 +38,63 @@ def connection() -> Iterator[sqlite3.Connection]:
         db.close()
 
 
+def backup_database(keep: int = 7) -> None:
+    if not DATABASE.exists():
+        return
+    folder = DATA_DIR / "backups"
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / f"dashboard-{time.strftime('%Y%m%d-%H%M%S')}.sqlite3"
+    source = sqlite3.connect(DATABASE)
+    try:
+        destination = sqlite3.connect(target)
+        try:
+            source.backup(destination)
+        finally:
+            destination.close()
+    finally:
+        source.close()
+    for old in sorted(folder.glob("dashboard-*.sqlite3"))[:-keep]:
+        old.unlink(missing_ok=True)
+
+
+def wallet_overview(account_id: int) -> list[dict]:
+    rows = []
+    with connection() as db:
+        for character in db.execute(
+            "SELECT id, name FROM characters WHERE account_id = ? ORDER BY name", (account_id,)
+        ).fetchall():
+            plan = db.execute(
+                "SELECT start_balance FROM wallet_plans WHERE character_id = ?", (character["id"],)
+            ).fetchone()
+            sums = {
+                row["kind"]: row["total"]
+                for row in db.execute(
+                    "SELECT kind, SUM(amount) AS total FROM wallet_entries "
+                    "WHERE character_id = ? GROUP BY kind",
+                    (character["id"],),
+                ).fetchall()
+            }
+            start = plan["start_balance"] if plan else 0
+            income = sums.get("income") or 0
+            expense = sums.get("expense") or 0
+            rows.append(
+                {
+                    "id": character["id"],
+                    "name": character["name"],
+                    "start": start,
+                    "income": income,
+                    "expense": expense,
+                    "balance": start + income - expense,
+                }
+            )
+    return rows
+
+
 def initialize() -> None:
+    try:
+        backup_database()
+    except (OSError, sqlite3.Error):
+        pass
     with connection() as db:
         db.executescript(
             """
