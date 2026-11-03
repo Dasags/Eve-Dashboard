@@ -57,6 +57,11 @@
       <label>Datum<input type="date" name="entry_date" required></label>
       <label style="margin-top:.6rem">Beschreibung<input name="description" maxlength="120" required></label>
       <label style="margin-top:.6rem">Betrag (ISK)<input type="number" name="amount" min=".01" step=".01" required></label>
+      <div style="display:flex;align-items:center;gap:.6rem;margin-top:.6rem">
+        <label style="display:flex;align-items:center;gap:.4rem;grid-auto-flow:column"><input type="checkbox" name="corp_tax" value="1" id="corp-tax-toggle" onchange="document.getElementById('corp-tax-pct').disabled=!this.checked">Corp-Steuer abziehen</label>
+        <input type="number" name="corp_tax_percent" id="corp-tax-pct" min="0" max="99.99" step=".01" placeholder="%" disabled style="width:5.5rem" aria-label="Corp-Steuer in Prozent">
+      </div>
+      <p class="hint">Bei aktivierter Corp-Steuer wird der Prozentsatz vom Betrag abgezogen und nur der Rest gebucht.</p>
       <div class="form-actions"><button class="primary">Eingang hinzufügen</button></div>
     </form>
   </section>
