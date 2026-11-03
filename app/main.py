@@ -700,26 +700,14 @@ async def wallet_page(request: Request, view: str = "journal"):
 async def wallet_distribution(request: Request):
     account_id, character_id = require_account(request)
     require_module(request, "wallet")
-    if "esi-wallet.read_character_wallet.v1" not in storage.get_character(character_id)["scopes"]:
-        return render(
-            request,
-            "wallet_distribution.html",
-            needs_scopes=True,
-            plan={"start_balance": 0, "labels": [], "entries": []},
-            wallet_balance=0,
-            total_pool=0,
-            total_expenses=0,
-            allocations=[],
-            unallocated=100,
-        )
     plan = storage.wallet_plan(account_id, character_id)
-    try:
-        async with ESIClient(character_id) as esi:
-            wallet_balance = float(
-                await esi.get(f"/characters/{character_id}/wallet/")
-            )
-    except httpx.HTTPError as exc:
-        raise HTTPException(502, "Wallet-Saldo ist momentan nicht über ESI erreichbar.") from exc
+    wallet_balance = None
+    if "esi-wallet.read_character_wallet.v1" in storage.get_character(character_id)["scopes"]:
+        try:
+            async with ESIClient(character_id) as esi:
+                wallet_balance = float(await esi.get(f"/characters/{character_id}/wallet/"))
+        except httpx.HTTPError:
+            wallet_balance = None
     total_income = sum(entry["amount"] for entry in plan["entries"] if entry["kind"] == "income")
     total_expenses = sum(entry["amount"] for entry in plan["entries"] if entry["kind"] == "expense")
     total_pool = plan["start_balance"] + total_income
@@ -744,9 +732,11 @@ async def wallet_distribution(request: Request):
     return render(
         request,
         "wallet_distribution.html",
-        needs_scopes=False,
+        needs_scopes=wallet_balance is None,
         plan=plan,
         wallet_balance=wallet_balance,
+        current_balance=total_pool - total_expenses,
+        total_income=total_income,
         total_pool=total_pool,
         total_expenses=total_expenses,
         allocations=allocations,
@@ -755,16 +745,24 @@ async def wallet_distribution(request: Request):
 
 
 @app.post("/wallet/plan/start")
-async def save_wallet_plan_start(request: Request):
+async def save_wallet_plan_start(request: Request, amount: str | None = Form(None)):
     account_id, character_id = require_account(request)
     require_module(request, "wallet")
-    if "esi-wallet.read_character_wallet.v1" not in storage.get_character(character_id)["scopes"]:
-        raise HTTPException(403, "Wallet-ESI-Scope fehlt.")
-    try:
-        async with ESIClient(character_id) as esi:
-            balance = float(await esi.get(f"/characters/{character_id}/wallet/"))
-    except httpx.HTTPError as exc:
-        raise HTTPException(502, "Wallet-Saldo ist momentan nicht über ESI erreichbar.") from exc
+    if amount and amount.strip():
+        try:
+            balance = float(amount.strip().replace(",", "."))
+        except ValueError as exc:
+            raise HTTPException(400, "Start-Kontostand ist ungültig.") from exc
+        if not math.isfinite(balance) or abs(balance) > 1e15:
+            raise HTTPException(400, "Start-Kontostand ist ungültig.")
+    else:
+        if "esi-wallet.read_character_wallet.v1" not in storage.get_character(character_id)["scopes"]:
+            raise HTTPException(403, "Wallet-ESI-Scope fehlt.")
+        try:
+            async with ESIClient(character_id) as esi:
+                balance = float(await esi.get(f"/characters/{character_id}/wallet/"))
+        except httpx.HTTPError as exc:
+            raise HTTPException(502, "Wallet-Saldo ist momentan nicht über ESI erreichbar.") from exc
     storage.save_wallet_start(account_id, character_id, balance)
     return RedirectResponse("/wallet/distribution", status_code=303)
 
