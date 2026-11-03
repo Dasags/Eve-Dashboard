@@ -31,6 +31,12 @@
     <a class="button" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a>{% endif %}
   </section>
 </div>
+{% if overview|length > 1 %}
+<section class="panel" style="margin-top:1rem"><h2>Alle Charaktere</h2><div class="table-wrap"><table><thead><tr><th>Charakter</th><th>Start</th><th>Eingänge</th><th>Ausgaben</th><th>Kontostand</th></tr></thead><tbody>
+{% for row in overview %}<tr><td>{{ row.name }}{% if active_character and active_character.id == row.id %} <span class="pill good">aktiv</span>{% endif %}</td><td>{{ row.start|isk }} ISK</td><td>{{ row.income|isk }} ISK</td><td>{{ row.expense|isk }} ISK</td><td style="color:{{ '#ff8490' if row.balance < 0 else '#67d69c' }}">{{ row.balance|isk }} ISK</td></tr>{% endfor %}
+<tr><th>Gesamt</th><th>{{ overview|sum(attribute='start')|isk }} ISK</th><th>{{ overview|sum(attribute='income')|isk }} ISK</th><th>{{ overview|sum(attribute='expense')|isk }} ISK</th><th>{{ overview|sum(attribute='balance')|isk }} ISK</th></tr>
+</tbody></table></div></section>
+{% endif %}
 <section class="panel" style="margin-top:1rem">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem"><h2>Verteilung</h2><span class="pill">Verteilt: {{ 100 - unallocated }} %</span></div>
   <div class="table-wrap"><table><thead><tr><th>Beschriftung</th><th>%</th><th>Anteil</th><th>Ausgegeben</th><th>Verbleibend</th><th></th></tr></thead><tbody>

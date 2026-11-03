@@ -45,4 +45,6 @@ docker compose up --build -d
 
 In Dockhand nach Änderungen am Repository den Stack neu bauen bzw. mit Image-Build neu deployen. Bei Verwendung eines veröffentlichten GHCR-Images stattdessen den `build:`-Eintrag entfernen und das Image unter `image:` eintragen; nach einem neuen Image-Build Image neu laden und den Stack aktualisieren.
 
+Beim Start wird automatisch eine Sicherung der Datenbank in `/data/backups` angelegt (die letzten 7 bleiben). Wallet-Pläne sind pro Charakter gespeichert und liegen in der Datenbank. **Wichtig:** `SESSION_SECRET` muss bei jedem Neubau gleich bleiben, sonst können die gespeicherten EVE-Tokens nicht mehr entschlüsselt werden, und das Volume `eve-dashboard-data` darf nicht gelöscht werden (kein `down -v`).
+
 Das Docker-Volume `eve-dashboard-data` enthält Datenbank, verschlüsselte Tokens, Preisverläufe und externe Daten-Caches. Es bleibt bei einem Container-Neustart erhalten und sollte regelmäßig gesichert werden. Der Container benötigt ausgehenden Internetzugriff auf EVE SSO, ESI, zKillboard und Fuzzwork.

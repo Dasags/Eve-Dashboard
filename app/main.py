@@ -736,6 +736,7 @@ async def wallet_distribution(request: Request):
         plan=plan,
         wallet_balance=wallet_balance,
         current_balance=total_pool - total_expenses,
+        overview=storage.wallet_overview(account_id),
         total_income=total_income,
         total_pool=total_pool,
         total_expenses=total_expenses,
