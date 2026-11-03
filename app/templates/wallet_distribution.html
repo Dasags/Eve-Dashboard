@@ -13,15 +13,22 @@
   <noscript><button>Wechseln</button></noscript>
 </form>
 {% endif %}
-{% if needs_scopes %}
-<section class="panel"><p>Für den Wallet-Saldo fehlt `esi-wallet.read_character_wallet.v1`.</p><a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
-{% else %}
-<div class="grid two">
-  <section class="panel"><div class="eyebrow">Kontostand (ESI)</div><strong style="font-size:1.4rem">{{ wallet_balance|isk }} ISK</strong>
-    <form method="post" action="/wallet/plan/start"><div class="form-actions"><button>Als Start übernehmen</button></div></form>
+<div class="grid three">
+  <section class="panel"><div class="eyebrow">Aktueller Kontostand (berechnet)</div>
+    <strong style="font-size:1.6rem;color:{{ '#ff8490' if current_balance < 0 else '#67d69c' }}">{{ current_balance|isk }} ISK</strong>
+    <p class="hint">Start {{ plan.start_balance|isk }} + Eingänge {{ total_income|isk }} − Ausgaben {{ total_expenses|isk }}</p>
   </section>
   <section class="panel"><div class="eyebrow">Start-Kontostand</div><strong style="font-size:1.4rem">{{ plan.start_balance|isk }} ISK</strong>
-    <p class="hint">Start + Eingänge {{ total_pool|isk }} ISK · Ausgaben {{ total_expenses|isk }} ISK</p>
+    <form method="post" action="/wallet/plan/start">
+      <label style="margin-top:.6rem">Start-Kontostand setzen (ISK)<input name="amount" inputmode="decimal" placeholder="z. B. 1500000000" value="{{ plan.start_balance|round(2) if plan.start_balance else '' }}"></label>
+      <div class="form-actions"><button class="primary">Speichern</button></div>
+    </form>
+  </section>
+  <section class="panel"><div class="eyebrow">Kontostand (ESI)</div>
+    {% if wallet_balance is not none %}<strong style="font-size:1.4rem">{{ wallet_balance|isk }} ISK</strong>
+    <form method="post" action="/wallet/plan/start"><div class="form-actions"><button>ESI-Wert als Start übernehmen</button></div></form>
+    {% else %}<p class="hint">Nicht verfügbar. Berechtigung <code>esi-wallet.read_character_wallet.v1</code> fehlt oder ESI ist nicht erreichbar.</p>
+    <a class="button" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a>{% endif %}
   </section>
 </div>
 <section class="panel" style="margin-top:1rem">
@@ -68,5 +75,4 @@
 {% for entry in plan.entries %}<tr><td>{{ entry.entry_date }}</td><td>{{ "Eingang" if entry.kind == "income" else "Ausgabe" }}</td><td>{{ entry.description }}</td><td>{% for label in plan.labels %}{% if label.id == entry.label_id %}{{ label.name }}{% endif %}{% endfor %}</td><td>{{ entry.amount|isk }} ISK</td><td><form method="post" action="/wallet/plan/entries/{{ entry.id }}/delete"><button class="danger">Entfernen</button></form></td></tr>
 {% else %}<tr><td colspan="6" class="muted">Noch keine manuellen Einträge.</td></tr>{% endfor %}
 </tbody></table></div></section>
-{% endif %}
 {% endblock %}
