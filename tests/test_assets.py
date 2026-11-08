@@ -277,13 +277,16 @@ class BlueprintLibraryRouteTests(unittest.TestCase):
             self.addCleanup(item.stop)
 
     def test_page_lists_own_bpo_and_other_players_shared_bpc(self):
-        response = self.client.get("/bpo-bib?q=Acolyte&group=Drone%20Blueprints")
+        response = self.client.get("/bpo-bib?q=Acolyte&group=Drone%20Blueprints&tab=shared")
         self.assertEqual(response.status_code, 200)
         self.assertIn("Acolyte Blueprint", response.text)
         self.assertIn("Drone Blueprints", response.text)
         self.assertIn("10", response.text)
         self.assertIn("Other Pilot", response.text)
         self.assertIn("3", response.text)
+        self.assertIn('id="tab-own" aria-controls="panel-own" aria-selected="false"', response.text)
+        self.assertIn('id="tab-shared" aria-controls="panel-shared" aria-selected="true"', response.text)
+        self.assertIn('name="tab" value="shared"', response.text)
 
     def test_blueprint_api_scope_is_requested_for_existing_characters(self):
         from app.services.eve import SCOPE_NAMES
