@@ -9,6 +9,7 @@ Ein webbasiertes EVE-Online-Dashboard mit EVE-SSO-Anmeldung, Charakteren und Pro
 - **Charaktere:** EVE-SSO, Main-/Alt-Verwaltung, Charakter-, Corporation- und Allianzprofil.
 - **Skills:** trainierte Skills, Skillpunkte und Skill-Warteschlange.
 - **Wallet:** Kontostand, Journal, Transaktionen und manuelle Verteilungsplanung.
+- **Assets:** Gegenstände und Schiffe des ausgewählten Charakters mit Standortfilter, Namenssuche und Vergleich der niedrigsten Verkaufsorders in Jita und einem konfigurierten Heimatmarkt. Inhalte von Schiffen und Containern erscheinen am äußeren Standort; unbekannte Standorte zeigen ihre ESI-ID.
 - **Marketwatcher:** mehrere Itemlisten, EFT-Fitting-Import, Preise an NPC-Stationen oder Structures und Preisverlauf.
 - **Industry:** Materialbedarf, optionale Komponentenfertigung, Charakter-Assetbestand, Produktionszeiten und Kostenschätzung.
 - **Planetary Industry:** PI-Ketten mit wählbarer Einkaufsstufe, Zykluszeiten und Preisvergleich je Standort.
@@ -16,6 +17,8 @@ Ein webbasiertes EVE-Online-Dashboard mit EVE-SSO-Anmeldung, Charakteren und Pro
 - **Administration:** Passwort- oder optionaler Authentik-OIDC-Login, Module, Standorte und Startseiten-Einstellungen.
 
 Die Module (außer Dashboard) sind zunächst deaktiviert und können unter `/admin` eingeschaltet werden. Zusätzlich lassen sich unter `/admin` → „Spieler-Freigaben“ einzelne Module für einzelne Spieler freigeben. Industrie-Berechnungen berücksichtigen die eingegebenen Boni, die Zeit-Skills des Charakters (Industry, Advanced Industry, Reactions; wahlweise alle Level 5 oder keine) und optional die T2-Erfindung (Wahrscheinlichkeit aus Skills, Datacores, Decryptor, Auftragskosten, erwartete Versuche). Nicht eingerechnet: Blueprint-Kopierzeit/-kosten. Decryptor-Werte und Erfindungs-Auftragskosten sind Näherungen und sollten gegen das Spiel geprüft werden. Preise und externe Daten hängen von der Erreichbarkeit und den Berechtigungen der jeweiligen ESI-Endpunkte ab. ESI-/SDE-Daten konnten nicht in jeder Umgebung live geprüft werden.
+
+Für Assets benötigt jeder gewählte Charakter `esi-assets.read_assets.v1`. Heimatmärkte werden unter `/admin` → Standorte eingerichtet. Für Structure-Namen benötigt der Asset-Charakter `esi-universe.read_structures.v1` und Zugriff auf die Structure; für deren Markt benötigt der am Standort konfigurierte Charakter `esi-markets.structure_markets.v1`. Fehlende Namen oder Zugriffe werden mit der von ESI gelieferten Standort-ID angezeigt. Der Vergleich nutzt die niedrigste Verkaufsorder am jeweiligen Standort; fehlende Orders oder Fehler sind keine Nullpreise. Marktpreise werden nur für die 20 sichtbaren Positionen geladen.
 
 ## EVE-SSO einrichten
 

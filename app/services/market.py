@@ -127,6 +127,48 @@ async def quote(location: dict, type_id: int) -> dict:
     }
 
 
+async def sell_prices(location: dict, type_ids: list[int]) -> dict[int, dict]:
+    """Fetch station orders per type, or a structure's complete order book once."""
+    character_id = location.get("character_id") if location["kind"] == "structure" else None
+    if location["kind"] == "structure":
+        if not character_id:
+            raise PermissionError("Für diese Structure ist kein Abfrage-Charakter festgelegt.")
+        character = storage.get_character(character_id)
+        if not character or "esi-markets.structure_markets.v1" not in character["scopes"]:
+            raise PermissionError("Dem Structure-Charakter fehlt esi-markets.structure_markets.v1.")
+    region_id = await _resolve_region(location) if location["kind"] == "station" else None
+    async with ESIClient(character_id) as esi:
+        if location["kind"] == "structure":
+            orders = await _paginated_orders(esi, f"/markets/structures/{location['location_id']}/", {})
+            prices: dict[int, list[float]] = {type_id: [] for type_id in type_ids}
+            for order in orders:
+                if order["type_id"] in prices and not order["is_buy_order"]:
+                    prices[order["type_id"]].append(float(order["price"]))
+            return {
+                type_id: {"lowest_sell": min(values) if values else None, "error": None}
+                for type_id, values in prices.items()
+            }
+
+        semaphore = asyncio.Semaphore(3)
+
+        async def station_price(type_id: int) -> tuple[int, dict]:
+            try:
+                async with semaphore:
+                    orders = await _paginated_orders(
+                        esi, f"/markets/{region_id}/orders/", {"order_type": "sell", "type_id": type_id}
+                    )
+                prices = [
+                    float(order["price"]) for order in orders
+                    if order["location_id"] == location["location_id"]
+                    and order["type_id"] == type_id and not order["is_buy_order"]
+                ]
+                return type_id, {"lowest_sell": min(prices) if prices else None, "error": None}
+            except (httpx.HTTPError, ValueError, RuntimeError) as exc:
+                return type_id, {"lowest_sell": None, "error": str(exc) or "Marktdaten nicht erreichbar"}
+
+        return dict(await asyncio.gather(*(station_price(type_id) for type_id in type_ids)))
+
+
 async def resolve_type_ids(names: list[str]) -> dict[str, int]:
     cleaned = list(dict.fromkeys(name.strip() for name in names if name.strip()))
     if not cleaned:
