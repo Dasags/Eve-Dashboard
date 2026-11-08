@@ -9,7 +9,7 @@ Ein webbasiertes EVE-Online-Dashboard mit EVE-SSO-Anmeldung, Charakteren und Pro
 - **Charaktere:** EVE-SSO, Main-/Alt-Verwaltung, Charakter-, Corporation- und Allianzprofil.
 - **Skills:** trainierte Skills, Skillpunkte und Skill-Warteschlange.
 - **Wallet:** Kontostand, Journal, Transaktionen und manuelle Verteilungsplanung.
-- **Assets:** Gegenstände und Schiffe des ausgewählten Charakters mit Standortfilter, Namenssuche und Vergleich der niedrigsten Verkaufsorders in Jita und einem konfigurierten Heimatmarkt. Inhalte von Schiffen und Containern erscheinen am äußeren Standort; unbekannte Standorte zeigen ihre ESI-ID.
+- **Assets:** Gegenstände und Schiffe des ausgewählten Charakters mit Standortfilter, Namenssuche und Vergleich der niedrigsten Verkaufsorders in Jita und einem konfigurierten Heimatmarkt. Blueprint-Originale (BPO) werden von Kopien (BPC) unterschieden; für BPC wird kein Marktpreis angezeigt. Inhalte von Schiffen und Containern erscheinen am äußeren Standort; unbekannte Standorte zeigen ihre ESI-ID.
 - **Marketwatcher:** mehrere Itemlisten, EFT-Fitting-Import, Preise an NPC-Stationen oder Structures und Preisverlauf.
 - **Industry:** Materialbedarf, optionale Komponentenfertigung, Charakter-Assetbestand, Produktionszeiten und Kostenschätzung.
 - **Planetary Industry:** PI-Ketten mit wählbarer Einkaufsstufe, Zykluszeiten und Preisvergleich je Standort.
