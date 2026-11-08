@@ -15,21 +15,27 @@
 </form>
 {% endif %}
 {% if inventory_error %}<div class="notice error">{{ inventory_error }}</div>{% endif %}
-{% if not has_blueprint_scope %}
-<section class="panel"><p>Für den Blueprint-Bestand fehlt <code>esi-characters.read_blueprints.v1</code>. Bitte den Charakter mit dieser zusätzlichen EVE-Berechtigung erneut anmelden. Bereits freigegebene Blueprints anderer Spieler bleiben sichtbar.</p>
-  <a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
-{% else %}
 <section class="panel">
-  <p class="hint">Teile einzelne Blueprints freiwillig mit den anderen Dashboard-Spielern. Angezeigt wird dein aktiver Charakter als Ansprechpartner für eine Ingame-Nachricht. Kopien sind als BPC markiert; ME, TE und Runs werden direkt aus dem EVE-Blueprint-Bestand synchronisiert.</p>
+  <p class="hint">Eigene BPOs und BPCs getrennt von den Freigaben anderer Spieler. Unter „Meine Blueprints“ kannst du einzelne Einträge teilen; andere sehen deinen aktiven Charakter als Ansprechpartner.</p>
   <form method="get" action="/bpo-bib" class="toolbar">
     <label>Blueprint suchen<input name="q" value="{{ q }}" maxlength="100" placeholder="z. B. Dragonfly"></label>
     <label>Gruppe<select name="group"><option value="">Alle Gruppen</option>
       {% for item in groups %}<option value="{{ item }}" {% if selected_group == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
     </select></label>
+    <input type="hidden" name="tab" value="{{ selected_tab }}">
     <button class="primary">Filtern</button>
   </form>
 </section>
-<section class="panel" style="margin-top:1rem">
+<div class="bpo-tabs" role="tablist" aria-label="Blueprint-Bereiche">
+  <button type="button" role="tab" id="tab-own" aria-controls="panel-own" aria-selected="{{ 'true' if selected_tab == 'own' else 'false' }}" class="{{ 'primary' if selected_tab == 'own' else '' }}">Meine Blueprints ({{ own|length }})</button>
+  <button type="button" role="tab" id="tab-shared" aria-controls="panel-shared" aria-selected="{{ 'true' if selected_tab == 'shared' else 'false' }}" class="{{ 'primary' if selected_tab == 'shared' else '' }}">Freigegeben ({{ shared|length }})</button>
+</div>
+<section class="panel bpo-tab-panel" role="tabpanel" id="panel-own" aria-labelledby="tab-own" style="margin-top:1rem">
+{% if not has_blueprint_scope %}
+  <p>Für den eigenen Blueprint-Bestand fehlt <code>esi-characters.read_blueprints.v1</code>. Bitte den Charakter mit dieser zusätzlichen EVE-Berechtigung erneut anmelden. Freigegebene Blueprints anderer Spieler bleiben im eigenen Reiter sichtbar.</p>
+  <a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a>
+{% else %}
+  <p class="hint">ME, TE und Runs werden direkt aus dem EVE-Blueprint-Bestand synchronisiert.</p>
   <h2>Meine Blueprints</h2>
   <div class="table-wrap"><table><thead><tr><th>Gruppe</th><th>Blueprint</th><th>Typ</th><th>ME</th><th>TE</th><th>Runs</th><th>Freigabe</th></tr></thead><tbody>
     {% for item in own %}
@@ -47,9 +53,9 @@
     </tr>
     {% else %}<tr><td colspan="7">Keine BPOs oder BPCs im Bestand oder keine passenden Filter.</td></tr>{% endfor %}
   </tbody></table></div>
-</section>
 {% endif %}
-<section class="panel" style="margin-top:1rem">
+</section>
+<section class="panel bpo-tab-panel" role="tabpanel" id="panel-shared" aria-labelledby="tab-shared" style="margin-top:1rem">
   <h2>Von anderen Spielern freigegeben</h2>
   <p class="hint">Schreibe den angezeigten Charakter im Spiel an, um eine Leihe oder Zusammenarbeit abzusprechen. Eine Freigabe überträgt keinen Gegenstand.</p>
   <div class="table-wrap"><table><thead><tr><th>Gruppe</th><th>Blueprint</th><th>Typ</th><th>ME</th><th>TE</th><th>Runs</th><th>Ansprechpartner</th></tr></thead><tbody>
@@ -65,4 +71,40 @@
     {% else %}<tr><td colspan="7">Noch keine passenden Freigaben vorhanden.</td></tr>{% endfor %}
   </tbody></table></div>
 </section>
+{% endblock %}
+{% block head %}
+<style>
+  .bpo-tabs { display:flex; flex-wrap:wrap; gap:.6rem; margin-top:1rem; }
+  .bpo-tabs [aria-selected="true"] { border-color:#4774a2; background:#17304a; }
+  .bpo-tab-panel[hidden] { display:none; }
+</style>
+{% endblock %}
+{% block scripts %}
+<script>
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  const panels = [...document.querySelectorAll('[role="tabpanel"]')];
+  function activateTab(tab, focus = false) {
+    for (const button of tabs) {
+      const active = button === tab;
+      button.setAttribute("aria-selected", String(active));
+      button.tabIndex = active ? 0 : -1;
+      document.getElementById(button.getAttribute("aria-controls")).hidden = !active;
+    }
+    if (focus) tab.focus();
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", tab.id === "tab-shared" ? "shared" : "own");
+    history.replaceState(null, "", url);
+  }
+  for (const tab of tabs) {
+    tab.addEventListener("click", () => activateTab(tab));
+    tab.addEventListener("keydown", event => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      const index = tabs.indexOf(tab);
+      activateTab(tabs[(index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length], true);
+    });
+  }
+  const initialTab = new URLSearchParams(window.location.search).get("tab") === "shared" ? "tab-shared" : "tab-own";
+  activateTab(document.getElementById(initialTab));
+</script>
 {% endblock %}

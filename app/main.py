@@ -1080,6 +1080,7 @@ async def bpo_bib_page(
     request: Request,
     q: str = Query("", max_length=100),
     group: str = Query("", max_length=100),
+    tab: str = Query("own"),
 ):
     account_id, character_id = require_account(request)
     require_module(request, "bpo-bib")
@@ -1129,6 +1130,7 @@ async def bpo_bib_page(
         shared=shared,
         groups=groups,
         selected_group=selected_group,
+        selected_tab=tab if tab in {"own", "shared"} else "own",
         q=q.strip(),
         has_blueprint_scope=has_blueprint_scope,
         inventory_error=inventory_error,
