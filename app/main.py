@@ -18,11 +18,13 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.services import storage
+from app.services.assets import assemble_assets
 from app.services.eve import SCOPE_NAMES, ESIClient, authorization_url, exchange_code
 from app.services.incursions import get_incursions
 from app.services.killfeed import get_kills
 from app.services.map_data import get_map_data
 from app.services.market import quote as get_market_quote
+from app.services.market import sell_prices as get_sell_prices
 from app.services.market import resolve_type_ids
 from app.services.market import adjusted_prices as get_adjusted_prices
 from app.services.invention import DECRYPTORS, apply_invention, plan_invention
@@ -35,6 +37,7 @@ MODULE_DETAILS = {
     "dashboard": ("Char-Dashboard", "Charakter, Corporation, Allianz und MOTD."),
     "skills": ("Skills", "Skill-Warteschlange und Skill-Übersicht."),
     "wallet": ("Wallet", "Kontostand, Journal und Wallet-Verteilung."),
+    "assets": ("Assets", "Gegenstände und Schiffe mit Standort und Marktvergleich."),
     "industry": ("Industry", "Produktionskosten, Materialbedarf und Lagerbestand."),
     "incursions": ("Incursion", "Aktuelle Sansha-Incursions aus öffentlichen ESI-Daten."),
     "marketwatcher": ("Marketwatcher", "Item-Listen und regionale Marktpreise."),
@@ -160,6 +163,7 @@ def render(request: Request, page: str, **context):
     ]
     primary_names = (
         "wallet",
+        "assets",
         "skills",
         "planetary-industry",
         "industry",
@@ -393,7 +397,7 @@ def select_character(
     if not storage.character_belongs_to(character_id, account_id):
         raise HTTPException(404, "Charakter gehört nicht zu diesem Konto.")
     request.session["character_id"] = character_id
-    target = next if next in {"/", "/wallet", "/wallet/distribution", "/skills"} else "/dashboard"
+    target = next if next in {"/", "/wallet", "/wallet/distribution", "/skills", "/assets"} else "/dashboard"
     return RedirectResponse(target, status_code=303)
 
 
@@ -1056,6 +1060,143 @@ async def refresh_marketwatcher_route(
     except ValueError as exc:
         raise HTTPException(502, "Marktdaten konnten nicht vollständig gelesen werden.") from exc
     return RedirectResponse(f"/marketwatcher?watchlist_id={watchlist_id}", status_code=303)
+
+
+@app.get("/assets")
+async def assets_page(
+    request: Request,
+    q: str = Query("", max_length=100),
+    station: int | None = Query(None, gt=0),
+    market: int | None = Query(None, gt=0),
+    page: int = Query(1, ge=1),
+):
+    _, character_id = require_account(request)
+    require_module(request, "assets")
+    character = storage.get_character(character_id)
+    locations = storage.list_locations()
+    home_markets = [location for location in locations if not location["is_default"]]
+    chosen_market = next((location for location in home_markets if location["id"] == market), None)
+    if market is not None and chosen_market is None:
+        raise HTTPException(400, "Marktstandort nicht gefunden.")
+    context = {
+        "needs_scopes": "esi-assets.read_assets.v1" not in character["scopes"],
+        "home_markets": home_markets,
+        "market": market,
+        "q": q.strip(),
+        "station": station,
+        "stations": [],
+        "assets": [],
+        "current_page": 1,
+        "pages": 1,
+        "count": 0,
+    }
+    if context["needs_scopes"]:
+        return render(request, "assets.html", **context)
+    try:
+        async with ESIClient(character_id) as esi:
+            inventory = await paginated_list(esi, f"/characters/{character_id}/assets/")
+            item_ids = {item["item_id"] for item in inventory}
+            root_ids = {
+                item["location_id"]
+                for item in inventory
+                if item["location_id"] not in item_ids
+            }
+            public_ids = {item["type_id"] for item in inventory}
+            public_ids.update(identifier for identifier in root_ids if identifier < 1_000_000_000_000)
+            names = await resolve_names(esi, public_ids)
+            location_names = {
+                identifier: names[identifier] for identifier in root_ids if identifier in names
+            }
+            location_names.update(
+                {location["location_id"]: location["name"] for location in locations}
+            )
+            semaphore = asyncio.Semaphore(5)
+
+            async def resolve_structure(identifier: int) -> tuple[int, str | None]:
+                if "esi-universe.read_structures.v1" not in character["scopes"]:
+                    return identifier, None
+                try:
+                    async with semaphore:
+                        structure = await esi.get(f"/universe/structures/{identifier}/")
+                    return identifier, structure.get("name")
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code in {403, 404}:
+                        return identifier, None
+                    raise
+
+            unresolved_structures = [
+                identifier for identifier in root_ids
+                if identifier >= 1_000_000_000_000 and identifier not in location_names
+            ]
+            for identifier, name in await asyncio.gather(
+                *(resolve_structure(identifier) for identifier in unresolved_structures)
+            ):
+                if name:
+                    location_names[identifier] = name
+    except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+        raise HTTPException(502, "Assets konnten nicht über ESI geladen werden.") from exc
+
+    rows = assemble_assets(inventory, names, location_names)
+    stations = {row["location_id"]: row["location_name"] for row in rows}
+    filtered = [
+        row for row in rows
+        if (station is None or row["location_id"] == station)
+        and (not q.strip() or q.strip().casefold() in row["name"].casefold())
+    ]
+    filtered.sort(key=lambda row: (row["name"].casefold(), row["location_name"].casefold(), row["item_id"]))
+    pages = max(1, (len(filtered) + 19) // 20)
+    page = min(page, pages)
+    context.update(
+        stations=sorted(stations.items(), key=lambda item: item[1].casefold()),
+        assets=filtered[(page - 1) * 20:page * 20],
+        current_page=page,
+        pages=pages,
+        count=len(filtered),
+    )
+    return render(request, "assets.html", **context)
+
+
+@app.get("/assets/prices")
+async def assets_prices(
+    request: Request,
+    type_ids: str = Query(..., max_length=240),
+    market: int | None = Query(None, gt=0),
+):
+    require_account(request)
+    require_module(request, "assets")
+    try:
+        ids = list(dict.fromkeys(int(value) for value in type_ids.split(",")))
+        if not ids or len(ids) > 20 or any(identifier <= 0 for identifier in ids):
+            raise ValueError
+    except ValueError as exc:
+        raise HTTPException(400, "Ungültige Gegenstands-IDs.") from exc
+    locations = storage.list_locations()
+    jita = next((location for location in locations if location["is_default"]), None)
+    home = next(
+        (location for location in locations if location["id"] == market and not location["is_default"]),
+        None,
+    )
+    if jita is None or (market is not None and home is None):
+        raise HTTPException(400, "Marktstandort nicht gefunden.")
+    async def prices_for(location: dict) -> dict[int, dict]:
+        try:
+            return await get_sell_prices(location, ids)
+        except (httpx.HTTPError, ValueError, RuntimeError, PermissionError) as exc:
+            return {
+                type_id: {"lowest_sell": None, "error": str(exc) or "Marktdaten nicht erreichbar"}
+                for type_id in ids
+            }
+
+    results = await asyncio.gather(
+        *(prices_for(location) for location in ([jita, home] if home else [jita]))
+    )
+    return {
+        str(type_id): {
+            "jita": results[0][type_id],
+            "home": results[1][type_id] if home else None,
+        }
+        for type_id in ids
+    }
 
 
 async def account_assets(account_id: int) -> tuple[dict[int, int], list[str]]:

@@ -1,0 +1,160 @@
+import os
+import asyncio
+import atexit
+import shutil
+import tempfile
+import unittest
+from unittest.mock import AsyncMock, patch
+
+os.environ.setdefault("SESSION_SECRET", "test-session-secret")
+os.environ.setdefault("COOKIE_SECURE", "false")
+if "DATA_DIR" not in os.environ:
+    test_data_dir = tempfile.mkdtemp(prefix="eve-dashboard-assets-tests-")
+    os.environ["DATA_DIR"] = test_data_dir
+    atexit.register(shutil.rmtree, test_data_dir, ignore_errors=True)
+
+from fastapi.testclient import TestClient
+
+from app import main
+from app.services.assets import assemble_assets
+from app.services.market import sell_prices
+
+
+class AssetLayoutTests(unittest.TestCase):
+    def test_nested_items_and_missing_locations(self):
+        items = [
+            {"item_id": 1, "type_id": 10, "quantity": 1, "location_id": 600001, "location_type": "station"},
+            {"item_id": 2, "type_id": 11, "quantity": 3, "location_id": 1, "location_type": "item"},
+            {"item_id": 3, "type_id": 12, "quantity": 5, "location_id": 999999, "location_type": "item"},
+            {"item_id": 4, "type_id": 13, "quantity": 1, "location_id": 5, "location_type": "item"},
+            {"item_id": 5, "type_id": 14, "quantity": 1, "location_id": 4, "location_type": "item"},
+        ]
+        rows = assemble_assets(items, {11: "Modul"}, {600001: "Jita"})
+        self.assertEqual(rows[1]["location_name"], "Jita")
+        self.assertEqual(rows[1]["quantity"], 3)
+        self.assertTrue(rows[2]["location_missing"])
+        self.assertIn("999999", rows[2]["location_name"])
+        self.assertTrue(rows[3]["location_missing"])
+
+    def test_asset_pagination_fetches_all_esi_pages(self):
+        class Response:
+            headers = {"X-Pages": "2"}
+
+            def json(self):
+                return [{"item_id": 1}]
+
+        class Client:
+            request = AsyncMock(return_value=Response())
+            get = AsyncMock(return_value=[{"item_id": 2}])
+
+        items = asyncio.run(main.paginated_list(Client(), "/characters/1/assets/"))
+        self.assertEqual([item["item_id"] for item in items], [1, 2])
+
+
+class AssetRouteTests(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(main.app)
+        self.patches = [
+            patch("app.main.require_account", return_value=(1, 123)),
+            patch("app.main.require_module"),
+            patch("app.main.storage.get_character", return_value={"scopes": ["esi-assets.read_assets.v1"]}),
+            patch("app.main.storage.list_locations", return_value=[
+                {"id": 1, "name": "Jita", "location_id": 60003760, "is_default": 1},
+                {"id": 2, "name": "Heimat", "location_id": 60000001, "is_default": 0},
+            ]),
+        ]
+        for item in self.patches:
+            item.start()
+            self.addCleanup(item.stop)
+
+    def test_filter_and_unresolved_structure(self):
+        inventory = [
+            {"item_id": 1, "type_id": 10, "quantity": 3, "location_id": 60003760, "location_type": "station"},
+            {"item_id": 2, "type_id": 11, "quantity": 2, "location_id": 1000000001234, "location_type": "other"},
+        ]
+        with patch("app.main.paginated_list", new=AsyncMock(return_value=inventory)), \
+             patch("app.main.resolve_names", new=AsyncMock(return_value={10: "Rifter", 11: "Tritanium"})), \
+             patch("app.main.ESIClient") as client:
+            client.return_value.__aenter__ = AsyncMock(return_value=client)
+            client.return_value.__aexit__ = AsyncMock(return_value=None)
+            response = self.client.get("/assets?q=trit&station=1000000001234")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Tritanium", response.text)
+        self.assertNotIn("Rifter</td>", response.text)
+        self.assertIn("1000000001234", response.text)
+        self.assertIn("Standortname oder Zugriff fehlt", response.text)
+
+    def test_prices_are_per_location_and_no_order_is_not_zero(self):
+        async def quote(location, type_ids):
+            return {
+                type_id: {"lowest_sell": 10 if location["id"] == 1 else None, "error": None}
+                for type_id in type_ids
+            }
+
+        with patch("app.main.get_sell_prices", new=AsyncMock(side_effect=quote)):
+            response = self.client.get("/assets/prices?type_ids=10,10&market=2")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["10"]["jita"]["lowest_sell"], 10)
+        self.assertIsNone(response.json()["10"]["home"]["lowest_sell"])
+        self.assertEqual(self.client.get("/assets/prices?type_ids=10&market=99").status_code, 400)
+        self.assertEqual(self.client.get("/assets/prices?type_ids=" + ",".join(map(str, range(1, 22)))).status_code, 400)
+
+    def test_missing_scope_and_character_switch(self):
+        with patch("app.main.storage.get_character", return_value={"scopes": []}):
+            response = self.client.get("/assets")
+        self.assertIn("esi-assets.read_assets.v1", response.text)
+        with patch("app.main.storage.character_belongs_to", return_value=True):
+            response = self.client.post("/auth/chars/select", data={"character_id": 123, "next": "/assets"}, follow_redirects=False)
+        self.assertEqual(response.headers["location"], "/assets")
+
+    def test_pagination_and_access_control(self):
+        inventory = [
+            {"item_id": i, "type_id": 10, "quantity": 1, "location_id": 60003760, "location_type": "station"}
+            for i in range(1, 23)
+        ]
+        with patch("app.main.paginated_list", new=AsyncMock(return_value=inventory)), \
+             patch("app.main.resolve_names", new=AsyncMock(return_value={10: "Rifter"})), \
+             patch("app.main.ESIClient") as client:
+            client.return_value.__aenter__ = AsyncMock(return_value=client)
+            client.return_value.__aexit__ = AsyncMock(return_value=None)
+            response = self.client.get("/assets?page=2")
+        self.assertIn("Seite 2 von 2", response.text)
+        self.assertEqual(response.text.count('class="asset-row"'), 2)
+        with patch("app.main.require_module", side_effect=main.HTTPException(404)):
+            self.assertEqual(self.client.get("/assets").status_code, 404)
+            self.assertEqual(self.client.get("/assets/prices?type_ids=10").status_code, 404)
+
+
+class MarketPricesTests(unittest.TestCase):
+    def test_structure_order_book_is_read_once(self):
+        orders = [
+            {"type_id": 10, "is_buy_order": False, "price": 15},
+            {"type_id": 10, "is_buy_order": False, "price": 12},
+            {"type_id": 11, "is_buy_order": True, "price": 42},
+        ]
+        with patch("app.services.market.storage.get_character", return_value={"scopes": ["esi-markets.structure_markets.v1"]}), \
+             patch("app.services.market.ESIClient") as client, \
+             patch("app.services.market._paginated_orders", new=AsyncMock(return_value=orders)) as fetch:
+            client.return_value.__aenter__ = AsyncMock(return_value=client)
+            client.return_value.__aexit__ = AsyncMock(return_value=None)
+            result = asyncio.run(sell_prices({"kind": "structure", "location_id": 1000000001234, "character_id": 1}, [10, 11]))
+        self.assertEqual(fetch.await_count, 1)
+        self.assertEqual(result[10]["lowest_sell"], 12)
+        self.assertIsNone(result[11]["lowest_sell"])
+
+    def test_station_uses_only_sell_orders_at_selected_station(self):
+        orders = [
+            {"type_id": 10, "location_id": 1, "is_buy_order": False, "price": 15},
+            {"type_id": 10, "location_id": 2, "is_buy_order": False, "price": 3},
+            {"type_id": 10, "location_id": 1, "is_buy_order": True, "price": 1},
+        ]
+        with patch("app.services.market.ESIClient") as client, \
+             patch("app.services.market._paginated_orders", new=AsyncMock(return_value=orders)):
+            client.return_value.__aenter__ = AsyncMock(return_value=client)
+            client.return_value.__aexit__ = AsyncMock(return_value=None)
+            result = asyncio.run(sell_prices({"kind": "station", "location_id": 1, "region_id": 7}, [10]))
+        self.assertEqual(result[10]["lowest_sell"], 15)
+
+
+if __name__ == "__main__":
+    unittest.main()

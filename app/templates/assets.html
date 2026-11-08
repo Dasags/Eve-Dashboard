@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Assets – {{ app_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Char-Dashboard</div>
+<h1>Assets – {{ active_character.name if active_character else "Charakter" }}</h1>
+{% if characters|length > 1 %}
+<form method="post" action="/auth/chars/select" class="toolbar">
+  <input type="hidden" name="next" value="/assets">
+  <label>Charakter
+    <select name="character_id" onchange="this.form.submit()">
+      {% for character in characters %}<option value="{{ character.id }}" {% if active_character and active_character.id == character.id %}selected{% endif %}>{{ character.name }}{% if character.is_main %} (Main){% endif %}</option>{% endfor %}
+    </select>
+  </label>
+  <noscript><button>Wechseln</button></noscript>
+</form>
+{% endif %}
+{% if needs_scopes %}
+<section class="panel">
+  <p>Für die Assets fehlt die ESI-Berechtigung <code>esi-assets.read_assets.v1</code> für diesen Charakter.</p>
+  <a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a>
+</section>
+{% else %}
+<section class="panel">
+  <form method="get" action="/assets" class="toolbar">
+    <label>Gegenstand suchen<input name="q" value="{{ q }}" maxlength="100" placeholder="Name eingeben"></label>
+    <label>Station / Standort<select name="station">
+      <option value="">Alle Standorte</option>
+      {% for id, name in stations %}<option value="{{ id }}" {% if station == id %}selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select></label>
+    <label>Heimatmarkt<select name="market">
+      <option value="">Kein Heimatmarkt ausgewählt</option>
+      {% for location in home_markets %}<option value="{{ location.id }}" {% if market == location.id %}selected{% endif %}>{{ location.name }}</option>{% endfor %}
+    </select></label>
+    <button class="primary" type="submit">Anzeigen</button>
+  </form>
+  <p class="hint">Preisvergleich: niedrigste Verkaufsorder pro Stück und Gesamtwert der jeweiligen Position. Fehlende Orders sind kein Preis von 0 ISK. Heimatmärkte werden unter Admin → Standorte eingerichtet; Structures benötigen die entsprechenden ESI-Berechtigungen.</p>
+  <p class="hint">{{ count }} Positionen · Seite {{ current_page }} von {{ pages }}. Inhalte in Schiffen und Containern sind dem äußeren Standort zugeordnet.</p>
+  <div class="table-wrap">
+    <table><thead><tr><th>Gegenstand / Schiff</th><th>Menge</th><th>Standort</th><th>Jita Verkauf</th><th>Heimatmarkt Verkauf</th><th>Differenz Gesamt</th></tr></thead>
+      <tbody>
+      {% for item in assets %}
+      <tr class="asset-row" data-type-id="{{ item.type_id }}" data-quantity="{{ item.quantity }}">
+        <td>{{ item.name }}{% if item.location_flag %}<br><small class="muted">{{ item.location_flag }}</small>{% endif %}</td>
+        <td>{{ item.quantity }}</td>
+        <td>{{ item.location_name }}{% if item.location_missing %}<br><small class="error">Standortname oder Zugriff fehlt; ESI-Standort-ID siehe oben.</small>{% endif %}</td>
+        <td class="price-jita">Lädt …</td><td class="price-home">{{ "Lädt …" if market else "Nicht ausgewählt" }}</td><td class="price-difference">—</td>
+      </tr>
+      {% else %}<tr><td colspan="6">Keine passenden Assets gefunden.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="toolbar" style="margin-top:1rem">
+    {% if current_page > 1 %}<a class="button" href="?q={{ q|urlencode }}{% if station %}&amp;station={{ station }}{% endif %}{% if market %}&amp;market={{ market }}{% endif %}&amp;page={{ current_page - 1 }}">Zurück</a>{% endif %}
+    {% if current_page < pages %}<a class="button" href="?q={{ q|urlencode }}{% if station %}&amp;station={{ station }}{% endif %}{% if market %}&amp;market={{ market }}{% endif %}&amp;page={{ current_page + 1 }}">Weiter</a>{% endif %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if not needs_scopes %}
+<script>
+  const rows = [...document.querySelectorAll(".asset-row")];
+  if (rows.length) {
+    const params = new URLSearchParams({type_ids: [...new Set(rows.map(row => row.dataset.typeId))].join(",")});
+    const market = {{ market|tojson }};
+    if (market !== null) params.set("market", market);
+    const isk = value => new Intl.NumberFormat("de-DE", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value) + " ISK";
+    function showPrice(cell, result, quantity) {
+      if (result.error) {
+        cell.textContent = "Nicht verfügbar";
+        cell.title = result.error;
+      } else if (result.lowest_sell === null) {
+        cell.textContent = "Keine Verkaufsorder";
+      } else {
+        cell.textContent = isk(result.lowest_sell) + " / Stk. · " + isk(result.lowest_sell * quantity) + " gesamt";
+      }
+    }
+    fetch("/assets/prices?" + params).then(response => {
+      if (!response.ok) throw new Error("Marktpreise konnten nicht geladen werden.");
+      return response.json();
+    }).then(prices => {
+      for (const row of rows) {
+        const price = prices[row.dataset.typeId], quantity = Number(row.dataset.quantity);
+        showPrice(row.querySelector(".price-jita"), price.jita, quantity);
+        if (price.home) {
+          showPrice(row.querySelector(".price-home"), price.home, quantity);
+          if (price.jita.lowest_sell !== null && price.home.lowest_sell !== null) {
+            row.querySelector(".price-difference").textContent = isk((price.home.lowest_sell - price.jita.lowest_sell) * quantity);
+          }
+        }
+      }
+    }).catch(error => {
+      for (const cell of document.querySelectorAll(".price-jita, .price-home")) {
+        if (cell.textContent === "Lädt …") { cell.textContent = "Nicht verfügbar"; cell.title = error.message; }
+      }
+    });
+  }
+</script>
+{% endif %}
+{% endblock %}

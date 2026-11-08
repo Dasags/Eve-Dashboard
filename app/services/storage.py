@@ -195,6 +195,7 @@ def initialize() -> None:
                 ("dashboard", 1),
                 ("skills", 0),
                 ("wallet", 0),
+                ("assets", 0),
                 ("industry", 0),
                 ("incursions", 0),
                 ("marketwatcher", 0),
