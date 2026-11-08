@@ -64,8 +64,8 @@ def blueprint_records(assets: list[dict], sde: dict[str, list[dict[str, str]]]) 
                 "group_name": field(group, "groupName", default="Blueprints"),
                 "is_copy": copy,
                 "runs": asset.get("blueprint_runs") if copy else None,
-                "material_efficiency": asset.get("material_efficiency"),
-                "time_efficiency": asset.get("time_efficiency"),
+                "material_efficiency": asset.get("blueprint_material_efficiency"),
+                "time_efficiency": asset.get("blueprint_time_efficiency"),
             }
         )
     return records
