@@ -2,7 +2,9 @@ import base64
 import hashlib
 import json
 import os
+import re
 import sqlite3
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -22,8 +24,106 @@ def _fernet() -> Fernet:
     return Fernet(key)
 
 
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+USE_POSTGRES = DATABASE_URL.startswith(("postgres://", "postgresql://"))
+if USE_POSTGRES:
+    import psycopg
+    from psycopg_pool import ConnectionPool
+
+    IntegrityError = (sqlite3.IntegrityError, psycopg.IntegrityError)
+else:
+    IntegrityError = (sqlite3.IntegrityError,)
+
+_pool: "ConnectionPool | None" = None
+_pool_lock = threading.Lock()
+_SQLITE_FALLBACK_NOW = (
+    "to_char((now() at time zone 'utc') - interval '{hours} hours', 'YYYY-MM-DD HH24:MI:SS')"
+)
+
+
+class _Row(dict):
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+        return super().__getitem__(key)
+
+
+def _row_factory(cursor):
+    names = [column.name for column in cursor.description or []]
+    return lambda values: _Row(zip(names, values))
+
+
+def _translate(sql: str) -> str:
+    sql = sql.replace("%", "%%").replace("?", "%s")
+    if "INSERT OR IGNORE INTO" in sql:
+        sql = sql.replace("INSERT OR IGNORE INTO", "INSERT INTO").rstrip().rstrip(";")
+        sql += " ON CONFLICT DO NOTHING"
+    sql = sql.replace("SELECT last_insert_rowid()", "SELECT lastval()")
+    sql = re.sub(
+        r"datetime\('now', '-(\d+) hours'\)",
+        lambda match: _SQLITE_FALLBACK_NOW.format(hours=match.group(1)),
+        sql,
+    )
+    return sql
+
+
+def _translate_ddl(sql: str) -> str:
+    sql = sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
+    sql = re.sub(r"\bINTEGER\b", "BIGINT", sql)
+    sql = re.sub(r"\bBLOB\b", "BYTEA", sql)
+    sql = re.sub(r"\bREAL\b", "DOUBLE PRECISION", sql)
+    sql = sql.replace(
+        "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "TEXT NOT NULL DEFAULT to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS')",
+    )
+    return sql
+
+
+class _PgDb:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def _cursor(self):
+        return self.conn.cursor(row_factory=_row_factory)
+
+    def execute(self, sql: str, params=()):
+        cursor = self._cursor()
+        cursor.execute(_translate(sql), params)
+        return cursor
+
+    def executemany(self, sql: str, rows):
+        cursor = self._cursor()
+        cursor.executemany(_translate(sql), list(rows))
+        return cursor
+
+    def executescript(self, script: str):
+        for statement in script.split(";"):
+            if statement.strip():
+                self.conn.execute(_translate_ddl(statement))
+
+
+def _get_pool():
+    global _pool
+    with _pool_lock:
+        if _pool is None:
+            pool = ConnectionPool(
+                DATABASE_URL,
+                min_size=1,
+                max_size=int(os.getenv("DB_POOL_SIZE", "10")),
+                open=True,
+                check=ConnectionPool.check_connection,
+            )
+            pool.wait(timeout=60)
+            _pool = pool
+        return _pool
+
+
 @contextmanager
-def connection() -> Iterator[sqlite3.Connection]:
+def connection() -> Iterator:
+    if USE_POSTGRES:
+        with _get_pool().connection() as conn:
+            yield _PgDb(conn)
+        return
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(DATABASE, timeout=15)
     db.row_factory = sqlite3.Row
@@ -38,8 +138,59 @@ def connection() -> Iterator[sqlite3.Connection]:
         db.close()
 
 
+_MIGRATION_TABLES = [
+    "accounts",
+    "characters",
+    "settings",
+    "modules",
+    "account_modules",
+    "locations",
+    "wallet_labels",
+    "wallet_entries",
+    "wallet_plans",
+    "watchlists",
+    "watchlist_items",
+    "watchlist_locations",
+    "price_history",
+]
+
+
+def _migrate_sqlite_to_postgres(db) -> None:
+    """Einmaliger Import der bisherigen SQLite-Datenbank in eine leere PostgreSQL-Datenbank."""
+    if not DATABASE.exists() or db.execute("SELECT 1 FROM settings LIMIT 1").fetchone():
+        return
+    source = sqlite3.connect(f"file:{DATABASE}?mode=ro", uri=True)
+    source.row_factory = sqlite3.Row
+    try:
+        existing = {
+            row["name"]
+            for row in source.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        for table in _MIGRATION_TABLES:
+            if table not in existing:
+                continue
+            cursor = source.execute(f"SELECT * FROM {table}")
+            columns = [column[0] for column in cursor.description]
+            sql = (
+                f"INSERT INTO {table}({', '.join(columns)}) "
+                f"VALUES ({', '.join('?' for _ in columns)}) ON CONFLICT DO NOTHING"
+            )
+            while True:
+                rows = cursor.fetchmany(1000)
+                if not rows:
+                    break
+                db.executemany(sql, [tuple(row) for row in rows])
+            if "id" in columns and table not in {"characters"}:
+                db.execute(
+                    f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), "
+                    f"COALESCE((SELECT MAX(id) FROM {table}), 0) + 1, false)"
+                )
+    finally:
+        source.close()
+
+
 def backup_database(keep: int = 7) -> None:
-    if not DATABASE.exists():
+    if USE_POSTGRES or not DATABASE.exists():
         return
     folder = DATA_DIR / "backups"
     folder.mkdir(parents=True, exist_ok=True)
@@ -99,7 +250,7 @@ def initialize() -> None:
         db.executescript(
             """
             CREATE TABLE IF NOT EXISTS accounts (
-                id INTEGER PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 main_character_id INTEGER NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
@@ -189,6 +340,8 @@ def initialize() -> None:
             );
             """
         )
+        if USE_POSTGRES:
+            _migrate_sqlite_to_postgres(db)
         db.executemany(
             "INSERT OR IGNORE INTO modules(name, enabled) VALUES (?, ?)",
             [
@@ -212,13 +365,14 @@ def initialize() -> None:
                 ("killfeed_count", "15"),
             ],
         )
-        columns = {
-            row["name"] for row in db.execute("PRAGMA table_info(locations)").fetchall()
-        }
-        if "region_id" not in columns:
-            db.execute("ALTER TABLE locations ADD COLUMN region_id INTEGER")
-        if "is_default" not in columns:
-            db.execute("ALTER TABLE locations ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0")
+        if not USE_POSTGRES:
+            columns = {
+                row["name"] for row in db.execute("PRAGMA table_info(locations)").fetchall()
+            }
+            if "region_id" not in columns:
+                db.execute("ALTER TABLE locations ADD COLUMN region_id INTEGER")
+            if "is_default" not in columns:
+                db.execute("ALTER TABLE locations ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0")
         db.execute(
             "INSERT OR IGNORE INTO locations(name, location_id, kind, region_id, is_default) "
             "VALUES ('Jita 4-4 (The Forge)', 60003760, 'station', 10000002, 1)"

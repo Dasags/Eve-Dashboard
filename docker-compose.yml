@@ -1,15 +1,36 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: eve-world-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: eveworld
+      POSTGRES_USER: eveworld
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-bitte-aendern}"
+    volumes:
+      - eve-dashboard-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eveworld -d eveworld"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   eve-world:
     image: eve-dashboard:latest
     build: .
     container_name: eve-world
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "8000:8000"
     volumes:
       - eve-dashboard-data:/data
     environment:
       APP_NAME: "EVE-World"
+      # Muss zu POSTGRES_PASSWORD oben passen. Ohne DATABASE_URL wird weiter SQLite in /data genutzt.
+      DATABASE_URL: "postgresql://eveworld:${POSTGRES_PASSWORD:-bitte-aendern}@db:5432/eveworld"
       CONTACT: "dein-name@example.com"        # User-Agent für zKillboard/ESI
       COOKIE_SECURE: "true"                    # false, wenn ohne HTTPS getestet wird
       PUBLIC_URL: "https://www.adresse.net"    # öffentliche Adresse (nötig für Authentik)
@@ -34,3 +55,4 @@ services:
 
 volumes:
   eve-dashboard-data:
+  eve-dashboard-pg:

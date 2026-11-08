@@ -4,7 +4,6 @@ import math
 import os
 import re
 import secrets
-import sqlite3
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -793,7 +792,7 @@ def create_wallet_label(
         raise HTTPException(400, "Die Summe der Beschriftungen darf 100 % nicht überschreiten.")
     try:
         storage.add_wallet_label(account_id, character_id, name.strip(), percentage)
-    except sqlite3.IntegrityError as exc:
+    except storage.IntegrityError as exc:
         raise HTTPException(409, "Diese Beschriftung ist bereits vorhanden.") from exc
     return RedirectResponse("/wallet/distribution", status_code=303)
 
@@ -931,7 +930,7 @@ def create_marketwatcher_list(request: Request, name: str = Form(...)):
         raise HTTPException(400, "Listenname muss zwischen 1 und 60 Zeichen lang sein.")
     try:
         list_id = storage.create_watchlist(account_id, name)
-    except sqlite3.IntegrityError as exc:
+    except storage.IntegrityError as exc:
         raise HTTPException(409, "Eine Liste mit diesem Namen existiert bereits.") from exc
     return RedirectResponse(f"/marketwatcher?watchlist_id={list_id}", status_code=303)
 
@@ -1868,7 +1867,7 @@ async def create_location(
         storage.add_location(
             name.strip(), resolved_id, kind, int(character_id) if character_id else None
         )
-    except sqlite3.IntegrityError as exc:
+    except storage.IntegrityError as exc:
         raise HTTPException(409, "Diese Stations-/Structure-ID ist bereits eingetragen.") from exc
     return RedirectResponse("/admin", status_code=303)
 
