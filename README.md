@@ -10,6 +10,7 @@ Ein webbasiertes EVE-Online-Dashboard mit EVE-SSO-Anmeldung, Charakteren und Pro
 - **Skills:** trainierte Skills, Skillpunkte und Skill-Warteschlange.
 - **Wallet:** Kontostand, Journal, Transaktionen und manuelle Verteilungsplanung.
 - **Assets:** Gegenstände und Schiffe des ausgewählten Charakters mit Standortfilter, Namenssuche und Vergleich der niedrigsten Verkaufsorders in Jita und einem konfigurierten Heimatmarkt. Blueprint-Originale (BPO) werden von Kopien (BPC) unterschieden; für BPC wird kein Marktpreis angezeigt. Inhalte von Schiffen und Containern erscheinen am äußeren Standort; unbekannte Standorte zeigen ihre ESI-ID.
+- **BPO-Bib:** Eigene BPOs/BPCs nach SDE-Gruppen mit Materialeffizienz (ME), Zeiteffizienz (TE) und BPC-Runs. Einzelne Blueprints können für andere Dashboard-Spieler freigegeben werden; die freigegebene Liste zeigt den EVE-Charakter als Ingame-Ansprechpartner.
 - **Marketwatcher:** mehrere Itemlisten, EFT-Fitting-Import, Preise an NPC-Stationen oder Structures und Preisverlauf.
 - **Industry:** Materialbedarf, optionale Komponentenfertigung, Charakter-Assetbestand, Produktionszeiten und Kostenschätzung.
 - **Planetary Industry:** PI-Ketten mit wählbarer Einkaufsstufe, Zykluszeiten und Preisvergleich je Standort.
@@ -19,6 +20,8 @@ Ein webbasiertes EVE-Online-Dashboard mit EVE-SSO-Anmeldung, Charakteren und Pro
 Die Module (außer Dashboard) sind zunächst deaktiviert und können unter `/admin` eingeschaltet werden. Zusätzlich lassen sich unter `/admin` → „Spieler-Freigaben“ einzelne Module für einzelne Spieler freigeben. Industrie-Berechnungen berücksichtigen die eingegebenen Boni, die Zeit-Skills des Charakters (Industry, Advanced Industry, Reactions; wahlweise alle Level 5 oder keine) und optional die T2-Erfindung (Wahrscheinlichkeit aus Skills, Datacores, Decryptor, Auftragskosten, erwartete Versuche). Nicht eingerechnet: Blueprint-Kopierzeit/-kosten. Decryptor-Werte und Erfindungs-Auftragskosten sind Näherungen und sollten gegen das Spiel geprüft werden. Preise und externe Daten hängen von der Erreichbarkeit und den Berechtigungen der jeweiligen ESI-Endpunkte ab. ESI-/SDE-Daten konnten nicht in jeder Umgebung live geprüft werden.
 
 Für Assets benötigt jeder gewählte Charakter `esi-assets.read_assets.v1`. Heimatmärkte werden unter `/admin` → Standorte eingerichtet. Für Structure-Namen benötigt der Asset-Charakter `esi-universe.read_structures.v1` und Zugriff auf die Structure; für deren Markt benötigt der am Standort konfigurierte Charakter `esi-markets.structure_markets.v1`. Fehlende Namen oder Zugriffe werden mit der von ESI gelieferten Standort-ID angezeigt. Der Vergleich nutzt die niedrigste Verkaufsorder am jeweiligen Standort; fehlende Orders oder Fehler sind keine Nullpreise. Marktpreise werden nur für die 20 sichtbaren Positionen geladen.
+
+Die BPO-Bib benötigt ebenfalls `esi-assets.read_assets.v1` für den ausgewählten Charakter. Freigaben sind für alle angemeldeten Spieler sichtbar und enthalten nur Blueprint-Typ, ME/TE/Runs sowie den Namen des freigebenden Charakters; sie teilen keine Tokens oder weiteren Asset-Daten. Der Bestand und Freigabestatus werden beim Öffnen bzw. Freigeben mit ESI synchronisiert; nicht mehr vorhandene Blueprints werden aus der Bibliothek entfernt. Die Datenbank muss dauerhaft erhalten bleiben.
 
 ## EVE-SSO einrichten
 

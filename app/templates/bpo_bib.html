@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}BPO-Bib – {{ app_name }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Blueprint-Bibliothek · {{ active_character.name if active_character else "Charakter" }}</div>
+<h1>BPO-Bib</h1>
+{% if characters|length > 1 %}
+<form method="post" action="/auth/chars/select" class="toolbar">
+  <input type="hidden" name="next" value="/bpo-bib">
+  <label>Charakter
+    <select name="character_id" onchange="this.form.submit()">
+      {% for character in characters %}<option value="{{ character.id }}" {% if active_character and active_character.id == character.id %}selected{% endif %}>{{ character.name }}{% if character.is_main %} (Main){% endif %}</option>{% endfor %}
+    </select>
+  </label>
+  <noscript><button>Wechseln</button></noscript>
+</form>
+{% endif %}
+{% if inventory_error %}<div class="notice error">{{ inventory_error }}</div>{% endif %}
+{% if not has_assets_scope %}
+<section class="panel"><p>Für den eigenen Blueprint-Bestand fehlt <code>esi-assets.read_assets.v1</code>. Bereits freigegebene Blueprints anderer Spieler bleiben sichtbar.</p>
+  <a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
+{% else %}
+<section class="panel">
+  <p class="hint">Teile einzelne Blueprints freiwillig mit den anderen Dashboard-Spielern. Angezeigt wird dein aktiver Charakter als Ansprechpartner für eine Ingame-Nachricht. Kopien sind als BPC markiert; ME, TE und Runs kommen aus deinem EVE-Bestand.</p>
+  <form method="get" action="/bpo-bib" class="toolbar">
+    <label>Blueprint suchen<input name="q" value="{{ q }}" maxlength="100" placeholder="z. B. Dragonfly"></label>
+    <label>Gruppe<select name="group"><option value="">Alle Gruppen</option>
+      {% for item in groups %}<option value="{{ item }}" {% if selected_group == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+    </select></label>
+    <button class="primary">Filtern</button>
+  </form>
+</section>
+<section class="panel" style="margin-top:1rem">
+  <h2>Meine Blueprints</h2>
+  <div class="table-wrap"><table><thead><tr><th>Gruppe</th><th>Blueprint</th><th>Typ</th><th>ME</th><th>TE</th><th>Runs</th><th>Freigabe</th></tr></thead><tbody>
+    {% for item in own %}
+    <tr>
+      <td>{{ item.group_name }}</td><td>{{ item.type_name }}</td>
+      <td>{{ "BPC · Kopie" if item.is_copy else "BPO · Original" }}</td>
+      <td>{{ item.material_efficiency if item.material_efficiency is not none else "—" }}</td>
+      <td>{{ item.time_efficiency if item.time_efficiency is not none else "—" }}</td>
+      <td>{% if not item.is_copy %}Unbegrenzt{% elif item.runs is not none %}{{ item.runs }}{% else %}—{% endif %}</td>
+      <td><form method="post" action="/bpo-bib/share">
+        <input type="hidden" name="item_id" value="{{ item.item_id }}">
+        <input type="hidden" name="action" value="{{ 'unshare' if item.is_shared else 'share' }}">
+        <button class="{{ 'danger' if item.is_shared else 'primary' }}">{{ "Freigabe zurückziehen" if item.is_shared else "Freigeben" }}</button>
+      </form></td>
+    </tr>
+    {% else %}<tr><td colspan="7">Keine BPOs oder BPCs im Bestand oder keine passenden Filter.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endif %}
+<section class="panel" style="margin-top:1rem">
+  <h2>Von anderen Spielern freigegeben</h2>
+  <p class="hint">Schreibe den angezeigten Charakter im Spiel an, um eine Leihe oder Zusammenarbeit abzusprechen. Eine Freigabe überträgt keinen Gegenstand.</p>
+  <div class="table-wrap"><table><thead><tr><th>Gruppe</th><th>Blueprint</th><th>Typ</th><th>ME</th><th>TE</th><th>Runs</th><th>Ansprechpartner</th></tr></thead><tbody>
+    {% for item in shared %}
+    <tr>
+      <td>{{ item.group_name }}</td><td>{{ item.type_name }}</td>
+      <td>{{ "BPC · Kopie" if item.is_copy else "BPO · Original" }}</td>
+      <td>{{ item.material_efficiency if item.material_efficiency is not none else "—" }}</td>
+      <td>{{ item.time_efficiency if item.time_efficiency is not none else "—" }}</td>
+      <td>{% if not item.is_copy %}Unbegrenzt{% elif item.runs is not none %}{{ item.runs }}{% else %}—{% endif %}</td>
+      <td><strong>{{ item.character_name }}</strong><br><small class="muted">zuletzt synchronisiert: {{ item.synced_at }}</small></td>
+    </tr>
+    {% else %}<tr><td colspan="7">Noch keine passenden Freigaben vorhanden.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endblock %}

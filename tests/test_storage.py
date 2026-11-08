@@ -41,6 +41,37 @@ class StorageTests(unittest.TestCase):
         self.assertTrue(storage.remove_character(987654322, account_id))
         self.assertTrue(storage.delete_account(account_id))
 
+    def test_blueprint_share_survives_inventory_refresh_and_removed_assets_are_unshared(self):
+        account_id = storage.save_character(
+            987654329,
+            "Blueprint Owner",
+            {"access_token": "a", "refresh_token": "r", "scope": [], "expires_at": 1},
+        )
+        blueprint = {
+            "item_id": 7001,
+            "type_id": 1001,
+            "type_name": "Acolyte Blueprint",
+            "group_name": "Drone Blueprints",
+            "is_copy": False,
+            "runs": None,
+            "material_efficiency": 10,
+            "time_efficiency": 20,
+        }
+        storage.sync_blueprint_library(987654329, [blueprint])
+        self.assertTrue(storage.set_blueprint_shared(987654329, 7001, True))
+        updated = {**blueprint, "material_efficiency": 12}
+        storage.sync_blueprint_library(987654329, [updated])
+        own = storage.blueprint_library(987654329)
+        shared = storage.shared_blueprint_library()
+        self.assertEqual(own[0]["material_efficiency"], 12)
+        self.assertEqual(own[0]["is_shared"], 1)
+        self.assertEqual(shared[0]["character_name"], "Blueprint Owner")
+        self.assertEqual(shared[0]["account_id"], account_id)
+        storage.sync_blueprint_library(987654329, [])
+        self.assertEqual(storage.blueprint_library(987654329), [])
+        self.assertEqual(storage.shared_blueprint_library(), [])
+        self.assertTrue(storage.delete_account(account_id))
+
 
 class AccountModuleTests(unittest.TestCase):
     def test_module_grants_are_per_account(self):

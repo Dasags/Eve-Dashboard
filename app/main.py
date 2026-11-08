@@ -20,7 +20,7 @@ from pydantic import BeforeValidator
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.services import storage
-from app.services.assets import assemble_assets, blueprint_types
+from app.services.assets import assemble_assets, blueprint_records, blueprint_types
 from app.services.eve import SCOPE_NAMES, ESIClient, authorization_url, exchange_code
 from app.services.incursions import get_incursions
 from app.services.killfeed import get_kills
@@ -32,7 +32,7 @@ from app.services.market import adjusted_prices as get_adjusted_prices
 from app.services.invention import DECRYPTORS, apply_invention, plan_invention
 from app.services.production import apply_market_and_stock, create_plan, skill_time_factor
 from app.services.planetary import add_location_prices, analyze as analyze_planetary, create_plan as create_planetary_plan, product_catalog
-from app.services.sde import field, invention_recipes, manufacturing_recipes, planetary_recipes, type_catalog
+from app.services.sde import as_int, field, invention_recipes, load_sde, manufacturing_recipes, planetary_recipes, type_catalog
 
 APP_NAME = os.getenv("APP_NAME", "EVE-World")
 MODULE_DETAILS = {
@@ -40,6 +40,7 @@ MODULE_DETAILS = {
     "skills": ("Skills", "Skill-Warteschlange und Skill-Übersicht."),
     "wallet": ("Wallet", "Kontostand, Journal und Wallet-Verteilung."),
     "assets": ("Assets", "Gegenstände und Schiffe mit Standort und Marktvergleich."),
+    "bpo-bib": ("BPO-Bib", "Eigene Blueprint-Originale und Kopien, ME/TE sowie freigegebene Blueprints."),
     "industry": ("Industry", "Produktionskosten, Materialbedarf und Lagerbestand."),
     "incursions": ("Incursion", "Aktuelle Sansha-Incursions aus öffentlichen ESI-Daten."),
     "marketwatcher": ("Marketwatcher", "Item-Listen und regionale Marktpreise."),
@@ -165,6 +166,7 @@ def render(request: Request, page: str, **context):
     ]
     primary_names = (
         "wallet",
+        "bpo-bib",
         "assets",
         "skills",
         "planetary-industry",
@@ -399,7 +401,7 @@ def select_character(
     if not storage.character_belongs_to(character_id, account_id):
         raise HTTPException(404, "Charakter gehört nicht zu diesem Konto.")
     request.session["character_id"] = character_id
-    target = next if next in {"/", "/wallet", "/wallet/distribution", "/skills", "/assets"} else "/dashboard"
+    target = next if next in {"/", "/wallet", "/wallet/distribution", "/skills", "/assets", "/bpo-bib"} else "/dashboard"
     return RedirectResponse(target, status_code=303)
 
 
@@ -1071,6 +1073,100 @@ def empty_filter_as_none(value: object) -> object:
 OptionalAssetFilter = Annotated[
     int | None, Query(gt=0), BeforeValidator(empty_filter_as_none)
 ]
+
+
+@app.get("/bpo-bib")
+async def bpo_bib_page(
+    request: Request,
+    q: str = Query("", max_length=100),
+    group: str = Query("", max_length=100),
+):
+    account_id, character_id = require_account(request)
+    require_module(request, "bpo-bib")
+    character = storage.get_character(character_id)
+    own = []
+    inventory_error = None
+    has_assets_scope = "esi-assets.read_assets.v1" in character["scopes"]
+    if has_assets_scope:
+        try:
+            inventory, sde_data = await asyncio.gather(
+                _character_assets(character_id),
+                load_sde(),
+            )
+            storage.sync_blueprint_library(character_id, blueprint_records(inventory, sde_data))
+            own = storage.blueprint_library(character_id)
+        except (httpx.HTTPError, OSError, RuntimeError, ValueError, KeyError) as exc:
+            inventory_error = (
+                "Der eigene Blueprint-Bestand konnte nicht aktualisiert werden. "
+                "Die zuletzt gespeicherten Freigaben bleiben sichtbar."
+            )
+            own = storage.blueprint_library(character_id)
+    else:
+        own = storage.blueprint_library(character_id)
+
+    all_shared = storage.shared_blueprint_library()
+    shared = [item for item in all_shared if item["account_id"] != account_id]
+    search = q.strip().casefold()
+    selected_group = group.strip()
+
+    def matches(item: dict) -> bool:
+        search_match = not search or search in item["type_name"].casefold()
+        if search and item.get("character_name"):
+            search_match = search_match or search in item["character_name"].casefold()
+        return search_match and (not selected_group or item["group_name"] == selected_group)
+
+    own = [item for item in own if matches(item)]
+    shared = [item for item in shared if matches(item)]
+    groups = sorted(
+        {item["group_name"] for item in storage.blueprint_library(character_id)}
+        | {item["group_name"] for item in all_shared},
+        key=str.casefold,
+    )
+    return render(
+        request,
+        "bpo_bib.html",
+        own=own,
+        shared=shared,
+        groups=groups,
+        selected_group=selected_group,
+        q=q.strip(),
+        has_assets_scope=has_assets_scope,
+        inventory_error=inventory_error,
+    )
+
+
+async def _character_assets(character_id: int) -> list[dict]:
+    async with ESIClient(character_id) as esi:
+        return await paginated_list(esi, f"/characters/{character_id}/assets/")
+
+
+@app.post("/bpo-bib/share")
+async def update_blueprint_share(
+    request: Request,
+    item_id: int = Form(...),
+    action: str = Form(...),
+):
+    _, character_id = require_account(request)
+    require_module(request, "bpo-bib")
+    if action not in {"share", "unshare"} or item_id <= 0:
+        raise HTTPException(400, "Ungültige Freigabe-Aktion.")
+    character = storage.get_character(character_id)
+    if "esi-assets.read_assets.v1" not in character["scopes"]:
+        raise HTTPException(403, "Für Freigaben wird esi-assets.read_assets.v1 benötigt.")
+    try:
+        inventory, sde_data = await asyncio.gather(
+            _character_assets(character_id),
+            load_sde(),
+        )
+    except (httpx.HTTPError, OSError, RuntimeError, ValueError) as exc:
+        raise HTTPException(502, "Blueprint-Bestand konnte nicht geprüft werden.") from exc
+    records = blueprint_records(inventory, sde_data)
+    storage.sync_blueprint_library(character_id, records)
+    if not any(item["item_id"] == item_id for item in records):
+        raise HTTPException(404, "Blueprint gehört nicht mehr zu diesem Charakter.")
+    if not storage.set_blueprint_shared(character_id, item_id, action == "share"):
+        raise HTTPException(404, "Blueprint nicht gefunden.")
+    return RedirectResponse("/bpo-bib", status_code=303)
 
 
 @app.get("/assets")

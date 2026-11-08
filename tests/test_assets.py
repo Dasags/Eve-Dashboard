@@ -16,11 +16,36 @@ if "DATA_DIR" not in os.environ:
 from fastapi.testclient import TestClient
 
 from app import main
-from app.services.assets import assemble_assets, blueprint_types
+from app.services.assets import assemble_assets, blueprint_records, blueprint_types
 from app.services.market import sell_prices
 
 
 class AssetLayoutTests(unittest.TestCase):
+    def test_extracts_bpos_and_bpcs_with_me_te_runs_by_group(self):
+        sde = {
+            "invTypes": [
+                {"typeID": "1", "typeName": "Acolyte Blueprint", "groupID": "10"},
+                {"typeID": "2", "typeName": "Dragonfly Blueprint", "groupID": "10"},
+                {"typeID": "3", "typeName": "Rifter", "groupID": "20"},
+            ],
+            "invGroups": [
+                {"groupID": "10", "groupName": "Frigate Blueprints", "categoryID": "9"},
+                {"groupID": "20", "groupName": "Frigates", "categoryID": "6"},
+            ],
+        }
+        assets = [
+            {"item_id": 11, "type_id": 1, "is_blueprint_copy": False, "material_efficiency": 10, "time_efficiency": 20},
+            {"item_id": 12, "type_id": 2, "is_blueprint_copy": True, "blueprint_runs": 5, "material_efficiency": 8, "time_efficiency": 16},
+            {"item_id": 13, "type_id": 3},
+        ]
+        result = blueprint_records(assets, sde)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["group_name"], "Frigate Blueprints")
+        self.assertEqual(result[0]["material_efficiency"], 10)
+        self.assertFalse(result[0]["is_copy"])
+        self.assertTrue(result[1]["is_copy"])
+        self.assertEqual(result[1]["runs"], 5)
+
     def test_nested_items_and_missing_locations(self):
         items = [
             {"item_id": 1, "type_id": 10, "quantity": 1, "location_id": 600001, "location_type": "station"},
@@ -196,6 +221,71 @@ class AssetRouteTests(unittest.TestCase):
         self.assertEqual(response.text.count("BPO · Original"), 1)
         self.assertEqual(response.text.count("Kein Marktpreis für BPC"), 4)
         self.assertEqual(response.text.count('class="asset-row asset-price-row"'), 2)
+
+
+class BlueprintLibraryRouteTests(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(main.app)
+        self.patches = [
+            patch("app.main.require_account", return_value=(1, 123)),
+            patch("app.main.require_module"),
+            patch("app.main.storage.get_character", return_value={"scopes": ["esi-assets.read_assets.v1"]}),
+            patch("app.main._character_assets", new=AsyncMock(return_value=[{"item_id": 11, "type_id": 1}])),
+            patch("app.main.load_sde", new=AsyncMock(return_value={
+                "invTypes": [{"typeID": "1", "typeName": "Acolyte Blueprint", "groupID": "10"}],
+                "invGroups": [{"groupID": "10", "groupName": "Drone Blueprints", "categoryID": "9"}],
+            })),
+            patch("app.main.storage.sync_blueprint_library"),
+            patch("app.main.storage.blueprint_library", return_value=[{
+                "item_id": 11, "type_id": 1, "type_name": "Acolyte Blueprint",
+                "group_name": "Drone Blueprints", "is_copy": 0, "runs": None,
+                "material_efficiency": 10, "time_efficiency": 20, "is_shared": 0,
+            }]),
+            patch("app.main.storage.shared_blueprint_library", return_value=[{
+                "item_id": 22, "type_id": 1, "type_name": "Acolyte Blueprint",
+                "group_name": "Drone Blueprints", "is_copy": 1, "runs": 3,
+                "material_efficiency": 8, "time_efficiency": 16, "is_shared": 1,
+                "account_id": 2, "character_name": "Other Pilot", "synced_at": "2026-11-08",
+            }]),
+        ]
+        for item in self.patches:
+            item.start()
+            self.addCleanup(item.stop)
+
+    def test_page_lists_own_bpo_and_other_players_shared_bpc(self):
+        response = self.client.get("/bpo-bib?q=Acolyte&group=Drone%20Blueprints")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Acolyte Blueprint", response.text)
+        self.assertIn("Drone Blueprints", response.text)
+        self.assertIn("10", response.text)
+        self.assertIn("Other Pilot", response.text)
+        self.assertIn("3", response.text)
+
+    def test_share_and_unshare_require_owned_blueprint(self):
+        with patch("app.main.storage.set_blueprint_shared", return_value=True) as update:
+            response = self.client.post(
+                "/bpo-bib/share",
+                data={"item_id": 11, "action": "share"},
+                follow_redirects=False,
+            )
+        self.assertEqual(response.status_code, 303)
+        update.assert_called_once_with(123, 11, True)
+        with patch("app.main.storage.set_blueprint_shared") as update:
+            response = self.client.post(
+                "/bpo-bib/share",
+                data={"item_id": 99, "action": "share"},
+                follow_redirects=False,
+            )
+        self.assertEqual(response.status_code, 404)
+        update.assert_not_called()
+
+    def test_invalid_share_action_rejected(self):
+        response = self.client.post(
+            "/bpo-bib/share",
+            data={"item_id": 11, "action": "delete"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 400)
 
 
 class MarketPricesTests(unittest.TestCase):
