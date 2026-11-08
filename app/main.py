@@ -1086,11 +1086,11 @@ async def bpo_bib_page(
     character = storage.get_character(character_id)
     own = []
     inventory_error = None
-    has_assets_scope = "esi-assets.read_assets.v1" in character["scopes"]
-    if has_assets_scope:
+    has_blueprint_scope = "esi-characters.read_blueprints.v1" in character["scopes"]
+    if has_blueprint_scope:
         try:
             inventory, sde_data = await asyncio.gather(
-                _character_assets(character_id),
+                _character_blueprints(character_id),
                 load_sde(),
             )
             storage.sync_blueprint_library(character_id, blueprint_records(inventory, sde_data))
@@ -1130,7 +1130,7 @@ async def bpo_bib_page(
         groups=groups,
         selected_group=selected_group,
         q=q.strip(),
-        has_assets_scope=has_assets_scope,
+        has_blueprint_scope=has_blueprint_scope,
         inventory_error=inventory_error,
     )
 
@@ -1138,6 +1138,11 @@ async def bpo_bib_page(
 async def _character_assets(character_id: int) -> list[dict]:
     async with ESIClient(character_id) as esi:
         return await paginated_list(esi, f"/characters/{character_id}/assets/")
+
+
+async def _character_blueprints(character_id: int) -> list[dict]:
+    async with ESIClient(character_id) as esi:
+        return await paginated_list(esi, f"/characters/{character_id}/blueprints/")
 
 
 @app.post("/bpo-bib/share")
@@ -1151,11 +1156,11 @@ async def update_blueprint_share(
     if action not in {"share", "unshare"} or item_id <= 0:
         raise HTTPException(400, "Ungültige Freigabe-Aktion.")
     character = storage.get_character(character_id)
-    if "esi-assets.read_assets.v1" not in character["scopes"]:
-        raise HTTPException(403, "Für Freigaben wird esi-assets.read_assets.v1 benötigt.")
+    if "esi-characters.read_blueprints.v1" not in character["scopes"]:
+        raise HTTPException(403, "Für die Blueprint-Bibliothek wird esi-characters.read_blueprints.v1 benötigt.")
     try:
         inventory, sde_data = await asyncio.gather(
-            _character_assets(character_id),
+            _character_blueprints(character_id),
             load_sde(),
         )
     except (httpx.HTTPError, OSError, RuntimeError, ValueError) as exc:

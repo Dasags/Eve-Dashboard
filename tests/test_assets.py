@@ -34,8 +34,8 @@ class AssetLayoutTests(unittest.TestCase):
             ],
         }
         assets = [
-            {"item_id": 11, "type_id": 1, "is_blueprint_copy": False, "blueprint_material_efficiency": 10, "blueprint_time_efficiency": 20},
-            {"item_id": 12, "type_id": 2, "is_blueprint_copy": True, "blueprint_runs": 5, "blueprint_material_efficiency": 8, "blueprint_time_efficiency": 16},
+            {"item_id": 11, "type_id": 1, "runs": -1, "material_efficiency": 10, "time_efficiency": 20},
+            {"item_id": 12, "type_id": 2, "runs": 5, "material_efficiency": 8, "time_efficiency": 16},
             {"item_id": 13, "type_id": 3},
         ]
         result = blueprint_records(assets, sde)
@@ -48,6 +48,27 @@ class AssetLayoutTests(unittest.TestCase):
         self.assertEqual(result[1]["runs"], 5)
         self.assertEqual(result[1]["material_efficiency"], 8)
         self.assertEqual(result[1]["time_efficiency"], 16)
+
+    def test_blueprint_endpoint_me_te_and_runs_fields(self):
+        source = [
+            {"item_id": 1, "type_id": 10, "runs": -1, "material_efficiency": 10, "time_efficiency": 20},
+            {"item_id": 2, "type_id": 11, "runs": 7, "material_efficiency": 8, "time_efficiency": 16},
+        ]
+        sde = {
+            "invTypes": [
+                {"typeID": "10", "typeName": "Original", "groupID": "5"},
+                {"typeID": "11", "typeName": "Copy", "groupID": "5"},
+            ],
+            "invGroups": [{"groupID": "5", "groupName": "Test Blueprints", "categoryID": "9"}],
+        }
+        records = blueprint_records(source, sde)
+        self.assertEqual(records[0]["is_copy"], False)
+        self.assertEqual(records[0]["material_efficiency"], 10)
+        self.assertEqual(records[0]["time_efficiency"], 20)
+        self.assertEqual(records[1]["is_copy"], True)
+        self.assertEqual(records[1]["runs"], 7)
+        self.assertEqual(records[1]["material_efficiency"], 8)
+        self.assertEqual(records[1]["time_efficiency"], 16)
 
     def test_nested_items_and_missing_locations(self):
         items = [
@@ -112,7 +133,7 @@ class AssetRouteTests(unittest.TestCase):
             patch("app.main.require_account", return_value=(1, 123)),
             patch("app.main.require_module"),
             patch("app.main.blueprint_types", new=AsyncMock(return_value={})),
-            patch("app.main.storage.get_character", return_value={"scopes": ["esi-assets.read_assets.v1"]}),
+            patch("app.main.storage.get_character", return_value={"scopes": ["esi-assets.read_assets.v1", "esi-characters.read_blueprints.v1"]}),
             patch("app.main.storage.list_locations", return_value=[
                 {"id": 1, "name": "Jita", "location_id": 60003760, "is_default": 1},
                 {"id": 2, "name": "Heimat", "location_id": 60000001, "is_default": 0},
@@ -232,8 +253,8 @@ class BlueprintLibraryRouteTests(unittest.TestCase):
         self.patches = [
             patch("app.main.require_account", return_value=(1, 123)),
             patch("app.main.require_module"),
-            patch("app.main.storage.get_character", return_value={"scopes": ["esi-assets.read_assets.v1"]}),
-            patch("app.main._character_assets", new=AsyncMock(return_value=[{"item_id": 11, "type_id": 1}])),
+            patch("app.main.storage.get_character", return_value={"scopes": ["esi-characters.read_blueprints.v1"]}),
+            patch("app.main._character_blueprints", new=AsyncMock(return_value=[{"item_id": 11, "type_id": 1, "runs": -1}])),
             patch("app.main.load_sde", new=AsyncMock(return_value={
                 "invTypes": [{"typeID": "1", "typeName": "Acolyte Blueprint", "groupID": "10"}],
                 "invGroups": [{"groupID": "10", "groupName": "Drone Blueprints", "categoryID": "9"}],
@@ -263,6 +284,15 @@ class BlueprintLibraryRouteTests(unittest.TestCase):
         self.assertIn("10", response.text)
         self.assertIn("Other Pilot", response.text)
         self.assertIn("3", response.text)
+
+    def test_blueprint_api_scope_is_requested_for_existing_characters(self):
+        from app.services.eve import SCOPE_NAMES
+
+        self.assertIn("esi-characters.read_blueprints.v1", SCOPE_NAMES)
+        with patch("app.main.storage.get_character", return_value={"scopes": ["esi-assets.read_assets.v1"]}):
+            response = self.client.get("/bpo-bib")
+        self.assertIn("esi-characters.read_blueprints.v1", response.text)
+        self.assertIn("erneut anmelden", response.text)
 
     def test_share_and_unshare_require_owned_blueprint(self):
         with patch("app.main.storage.set_blueprint_shared", return_value=True) as update:

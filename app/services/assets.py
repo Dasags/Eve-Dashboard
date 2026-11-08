@@ -55,7 +55,8 @@ def blueprint_records(assets: list[dict], sde: dict[str, list[dict[str, str]]]) 
         group = groups.get(group_id)
         if not group or as_int(group, "categoryID") != 9:
             continue
-        copy = bool(asset.get("is_blueprint_copy", False))
+        runs = asset.get("runs")
+        copy = runs != -1
         records.append(
             {
                 "item_id": int(asset["item_id"]),
@@ -63,9 +64,9 @@ def blueprint_records(assets: list[dict], sde: dict[str, list[dict[str, str]]]) 
                 "type_name": field(type_data, "typeName", default=f"Type {asset['type_id']}"),
                 "group_name": field(group, "groupName", default="Blueprints"),
                 "is_copy": copy,
-                "runs": asset.get("blueprint_runs") if copy else None,
-                "material_efficiency": asset.get("blueprint_material_efficiency"),
-                "time_efficiency": asset.get("blueprint_time_efficiency"),
+                "runs": runs if copy else None,
+                "material_efficiency": asset.get("material_efficiency"),
+                "time_efficiency": asset.get("time_efficiency"),
             }
         )
     return records

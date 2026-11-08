@@ -21,7 +21,7 @@ Die Module (außer Dashboard) sind zunächst deaktiviert und können unter `/adm
 
 Für Assets benötigt jeder gewählte Charakter `esi-assets.read_assets.v1`. Heimatmärkte werden unter `/admin` → Standorte eingerichtet. Für Structure-Namen benötigt der Asset-Charakter `esi-universe.read_structures.v1` und Zugriff auf die Structure; für deren Markt benötigt der am Standort konfigurierte Charakter `esi-markets.structure_markets.v1`. Fehlende Namen oder Zugriffe werden mit der von ESI gelieferten Standort-ID angezeigt. Der Vergleich nutzt die niedrigste Verkaufsorder am jeweiligen Standort; fehlende Orders oder Fehler sind keine Nullpreise. Marktpreise werden nur für die 20 sichtbaren Positionen geladen.
 
-Die BPO-Bib benötigt ebenfalls `esi-assets.read_assets.v1` für den ausgewählten Charakter. Freigaben sind für alle angemeldeten Spieler sichtbar und enthalten nur Blueprint-Typ, ME/TE/Runs sowie den Namen des freigebenden Charakters; sie teilen keine Tokens oder weiteren Asset-Daten. Der Bestand und Freigabestatus werden beim Öffnen bzw. Freigeben mit ESI synchronisiert; nicht mehr vorhandene Blueprints werden aus der Bibliothek entfernt. Die Datenbank muss dauerhaft erhalten bleiben.
+Die BPO-Bib benötigt `esi-characters.read_blueprints.v1` für den ausgewählten Charakter. Sie liest Blueprint-Typ, ME, TE und Runs aus EVE's eigenem Blueprint-Endpunkt. Für bestehende Charaktere muss der Scope über eine erneute EVE-SSO-Anmeldung ergänzt werden. Freigaben sind für alle angemeldeten Spieler sichtbar und enthalten nur Blueprint-Typ, ME/TE/Runs sowie den Namen des freigebenden Charakters; sie teilen keine Tokens oder weiteren Asset-Daten. Der Bestand und Freigabestatus werden beim Öffnen bzw. Freigeben mit ESI synchronisiert; nicht mehr vorhandene Blueprints werden aus der Bibliothek entfernt. Die Datenbank muss dauerhaft erhalten bleiben.
 
 ## EVE-SSO einrichten
 
@@ -32,6 +32,7 @@ Die BPO-Bib benötigt ebenfalls `esi-assets.read_assets.v1` für den ausgewählt
    - `esi-skills.read_skillqueue.v1`
    - `esi-wallet.read_character_wallet.v1`
    - `esi-assets.read_assets.v1`
+   - `esi-characters.read_blueprints.v1`
    - `esi-markets.structure_markets.v1`
    - `esi-universe.read_structures.v1`
 4. `EVE_CLIENT_ID`, `EVE_CLIENT_SECRET` und `PUBLIC_URL` in Compose/Dockhand konfigurieren.
