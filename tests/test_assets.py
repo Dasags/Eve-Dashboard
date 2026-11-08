@@ -16,7 +16,7 @@ if "DATA_DIR" not in os.environ:
 from fastapi.testclient import TestClient
 
 from app import main
-from app.services.assets import assemble_assets
+from app.services.assets import assemble_assets, blueprint_types
 from app.services.market import sell_prices
 
 
@@ -50,6 +50,32 @@ class AssetLayoutTests(unittest.TestCase):
         items = asyncio.run(main.paginated_list(Client(), "/characters/1/assets/"))
         self.assertEqual([item["item_id"] for item in items], [1, 2])
 
+    def test_asset_copy_flag_is_preserved(self):
+        rows = assemble_assets([
+            {"item_id": 1, "type_id": 10, "quantity": 1, "location_id": 6, "is_blueprint_copy": True},
+            {"item_id": 2, "type_id": 10, "quantity": 1, "location_id": 6},
+            {"item_id": 3, "type_id": 10, "quantity": 1, "location_id": 6, "is_blueprint_copy": False},
+        ], {}, {})
+        self.assertEqual([row["is_blueprint_copy"] for row in rows], [True, False, False])
+
+    def test_blueprint_categories_and_unavailable_types(self):
+        async def get(path):
+            values = {
+                "/universe/types/10/": {"group_id": 5},
+                "/universe/types/11/": {"group_id": 5},
+                "/universe/types/12/": {"group_id": 6},
+                "/universe/groups/5/": {"category_id": 9},
+                "/universe/groups/6/": {"category_id": 6},
+            }
+            if path not in values:
+                raise ValueError("unavailable")
+            return values[path]
+
+        client = type("Client", (), {"get": AsyncMock(side_effect=get)})()
+        result = asyncio.run(blueprint_types(client, {10, 11, 12, 13}))
+        self.assertEqual(result, {10: True, 11: True, 12: False, 13: None})
+        self.assertEqual(client.get.await_count, 6)
+
 
 class AssetRouteTests(unittest.TestCase):
     def setUp(self):
@@ -57,6 +83,7 @@ class AssetRouteTests(unittest.TestCase):
         self.patches = [
             patch("app.main.require_account", return_value=(1, 123)),
             patch("app.main.require_module"),
+            patch("app.main.blueprint_types", new=AsyncMock(return_value={})),
             patch("app.main.storage.get_character", return_value={"scopes": ["esi-assets.read_assets.v1"]}),
             patch("app.main.storage.list_locations", return_value=[
                 {"id": 1, "name": "Jita", "location_id": 60003760, "is_default": 1},
@@ -143,10 +170,32 @@ class AssetRouteTests(unittest.TestCase):
             client.return_value.__aexit__ = AsyncMock(return_value=None)
             response = self.client.get("/assets?page=2")
         self.assertIn("Seite 2 von 2", response.text)
-        self.assertEqual(response.text.count('class="asset-row"'), 2)
+        self.assertEqual(response.text.count('class="asset-row asset-price-row"'), 2)
         with patch("app.main.require_module", side_effect=main.HTTPException(404)):
             self.assertEqual(self.client.get("/assets").status_code, 404)
             self.assertEqual(self.client.get("/assets/prices?type_ids=10").status_code, 404)
+
+    def test_bpc_not_priceable_even_when_same_type_has_bpo(self):
+        inventory = [
+            {"item_id": 1, "type_id": 10, "quantity": 1, "location_id": 60003760, "location_type": "station", "is_blueprint_copy": True},
+            {"item_id": 2, "type_id": 10, "quantity": 1, "location_id": 60003760, "location_type": "station"},
+            {"item_id": 3, "type_id": 11, "quantity": 2, "location_id": 60003760, "location_type": "station", "is_blueprint_copy": True},
+            {"item_id": 4, "type_id": 12, "quantity": 5, "location_id": 60003760, "location_type": "station"},
+        ]
+        with patch("app.main.paginated_list", new=AsyncMock(return_value=inventory)), \
+             patch("app.main.resolve_names", new=AsyncMock(return_value={10: "Rifter Blueprint", 11: "Other Blueprint", 12: "Tritanium"})), \
+             patch("app.main.blueprint_types", new=AsyncMock(return_value={10: True, 12: False})) as categories, \
+             patch("app.main.ESIClient") as client:
+            client.return_value.__aenter__ = AsyncMock(return_value=client)
+            client.return_value.__aexit__ = AsyncMock(return_value=None)
+            response = self.client.get("/assets?market=2")
+        self.assertEqual(response.status_code, 200)
+        categories.assert_awaited_once()
+        self.assertEqual(categories.await_args.args[1], {10, 12})
+        self.assertEqual(response.text.count("BPC · Kopie"), 2)
+        self.assertEqual(response.text.count("BPO · Original"), 1)
+        self.assertEqual(response.text.count("Kein Marktpreis für BPC"), 4)
+        self.assertEqual(response.text.count('class="asset-row asset-price-row"'), 2)
 
 
 class MarketPricesTests(unittest.TestCase):

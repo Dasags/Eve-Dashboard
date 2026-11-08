@@ -34,16 +34,17 @@
     <button class="primary" type="submit">Anzeigen</button>
   </form>
   <p class="hint">Preisvergleich: niedrigste Verkaufsorder pro Stück und Gesamtwert der jeweiligen Position. Fehlende Orders sind kein Preis von 0 ISK. Heimatmärkte werden unter Admin → Standorte eingerichtet; Structures benötigen die entsprechenden ESI-Berechtigungen.</p>
+  <p class="hint">Blueprint-Originale (BPO) verwenden Marktpreise. Blueprint-Kopien (BPC) haben keinen vergleichbaren Marktpreis und werden nicht bewertet.</p>
   <p class="hint">{{ count }} Positionen · Seite {{ current_page }} von {{ pages }}. Inhalte in Schiffen und Containern sind dem äußeren Standort zugeordnet.</p>
   <div class="table-wrap">
     <table><thead><tr><th>Gegenstand / Schiff</th><th>Menge</th><th>Standort</th><th>Jita Verkauf</th><th>Heimatmarkt Verkauf</th><th>Differenz Gesamt</th></tr></thead>
       <tbody>
       {% for item in assets %}
-      <tr class="asset-row" data-type-id="{{ item.type_id }}" data-quantity="{{ item.quantity }}">
-        <td>{{ item.name }}{% if item.location_flag %}<br><small class="muted">{{ item.location_flag }}</small>{% endif %}</td>
+      <tr class="asset-row{% if not item.is_blueprint_copy %} asset-price-row{% endif %}" data-type-id="{{ item.type_id }}" data-quantity="{{ item.quantity }}">
+        <td>{{ item.name }}{% if item.is_blueprint_copy %} <span class="pill">BPC · Kopie</span>{% elif item.is_blueprint_original %} <span class="pill">BPO · Original</span>{% elif item.is_blueprint_original is none %} <span class="muted">Typ nicht bestimmbar</span>{% endif %}{% if item.location_flag %}<br><small class="muted">{{ item.location_flag }}</small>{% endif %}</td>
         <td>{{ item.quantity }}</td>
         <td>{{ item.location_name }}{% if item.location_missing %}<br><small class="error">Standortname oder Zugriff fehlt; ESI-Standort-ID siehe oben.</small>{% endif %}</td>
-        <td class="price-jita">Lädt …</td><td class="price-home">{{ "Lädt …" if market else "Nicht ausgewählt" }}</td><td class="price-difference">—</td>
+        <td class="price-jita">{{ "Kein Marktpreis für BPC" if item.is_blueprint_copy else "Lädt …" }}</td><td class="price-home">{{ "Kein Marktpreis für BPC" if item.is_blueprint_copy else ("Lädt …" if market else "Nicht ausgewählt") }}</td><td class="price-difference">—</td>
       </tr>
       {% else %}<tr><td colspan="6">Keine passenden Assets gefunden.</td></tr>{% endfor %}
       </tbody>
@@ -59,7 +60,7 @@
 {% block scripts %}
 {% if not needs_scopes %}
 <script>
-  const rows = [...document.querySelectorAll(".asset-row")];
+  const rows = [...document.querySelectorAll(".asset-price-row")];
   if (rows.length) {
     const params = new URLSearchParams({type_ids: [...new Set(rows.map(row => row.dataset.typeId))].join(",")});
     const market = {{ market|tojson }};

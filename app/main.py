@@ -20,7 +20,7 @@ from pydantic import BeforeValidator
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.services import storage
-from app.services.assets import assemble_assets
+from app.services.assets import assemble_assets, blueprint_types
 from app.services.eve import SCOPE_NAMES, ESIClient, authorization_url, exchange_code
 from app.services.incursions import get_incursions
 from app.services.killfeed import get_kills
@@ -1157,9 +1157,17 @@ async def assets_page(
     filtered.sort(key=lambda row: (row["name"].casefold(), row["location_name"].casefold(), row["item_id"]))
     pages = max(1, (len(filtered) + 19) // 20)
     page = min(page, pages)
+    visible = filtered[(page - 1) * 20:page * 20]
+    type_ids = {row["type_id"] for row in visible if not row["is_blueprint_copy"]}
+    if type_ids:
+        async with ESIClient() as esi:
+            blueprint_categories = await blueprint_types(esi, type_ids)
+        for row in visible:
+            if not row["is_blueprint_copy"]:
+                row["is_blueprint_original"] = blueprint_categories.get(row["type_id"])
     context.update(
         stations=sorted(stations.items(), key=lambda item: item[1].casefold()),
-        assets=filtered[(page - 1) * 20:page * 20],
+        assets=visible,
         current_page=page,
         pages=pages,
         count=len(filtered),
