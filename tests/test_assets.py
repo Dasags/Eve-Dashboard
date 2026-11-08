@@ -34,17 +34,20 @@ class AssetLayoutTests(unittest.TestCase):
             ],
         }
         assets = [
-            {"item_id": 11, "type_id": 1, "is_blueprint_copy": False, "material_efficiency": 10, "time_efficiency": 20},
-            {"item_id": 12, "type_id": 2, "is_blueprint_copy": True, "blueprint_runs": 5, "material_efficiency": 8, "time_efficiency": 16},
+            {"item_id": 11, "type_id": 1, "is_blueprint_copy": False, "blueprint_material_efficiency": 10, "blueprint_time_efficiency": 20},
+            {"item_id": 12, "type_id": 2, "is_blueprint_copy": True, "blueprint_runs": 5, "blueprint_material_efficiency": 8, "blueprint_time_efficiency": 16},
             {"item_id": 13, "type_id": 3},
         ]
         result = blueprint_records(assets, sde)
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["group_name"], "Frigate Blueprints")
         self.assertEqual(result[0]["material_efficiency"], 10)
+        self.assertEqual(result[0]["time_efficiency"], 20)
         self.assertFalse(result[0]["is_copy"])
         self.assertTrue(result[1]["is_copy"])
         self.assertEqual(result[1]["runs"], 5)
+        self.assertEqual(result[1]["material_efficiency"], 8)
+        self.assertEqual(result[1]["time_efficiency"], 16)
 
     def test_nested_items_and_missing_locations(self):
         items = [
