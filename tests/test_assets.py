@@ -84,6 +84,30 @@ class AssetRouteTests(unittest.TestCase):
         self.assertIn("1000000001234", response.text)
         self.assertIn("Standortname oder Zugriff fehlt", response.text)
 
+    def test_filter_form_accepts_empty_selections_and_validates_ids(self):
+        inventory = [
+            {"item_id": 1, "type_id": 10, "quantity": 3, "location_id": 60003760, "location_type": "station"},
+            {"item_id": 2, "type_id": 11, "quantity": 2, "location_id": 60000001, "location_type": "station"},
+        ]
+        with patch("app.main.paginated_list", new=AsyncMock(return_value=inventory)), \
+             patch("app.main.resolve_names", new=AsyncMock(return_value={10: "Rifter", 11: "Tritanium"})), \
+             patch("app.main.ESIClient") as client:
+            client.return_value.__aenter__ = AsyncMock(return_value=client)
+            client.return_value.__aexit__ = AsyncMock(return_value=None)
+            for query in ("?q=Rifter&station=&market=", "?q=&station=60003760&market=",
+                          "?q=&station=&market=2", "?q=&station=60003760&market=2"):
+                with self.subTest(query=query):
+                    response = self.client.get("/assets" + query)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertIn("Rifter", response.text)
+            response = self.client.get("/assets?q=&station=60003760&market=")
+            self.assertNotIn("Tritanium", response.text)
+            response = self.client.get("/assets?q=&station=&market=2")
+            self.assertIn('value="2" selected', response.text)
+            for query in ("?station=abc", "?station=0", "?market=abc", "?market=-1"):
+                with self.subTest(query=query):
+                    self.assertEqual(self.client.get("/assets" + query).status_code, 422)
+
     def test_prices_are_per_location_and_no_order_is_not_zero(self):
         async def quote(location, type_ids):
             return {

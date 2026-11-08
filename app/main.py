@@ -8,6 +8,7 @@ import sqlite3
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Annotated
 from urllib.parse import urlencode
 
 import httpx
@@ -15,6 +16,7 @@ import jwt
 from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BeforeValidator
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.services import storage
@@ -1062,12 +1064,21 @@ async def refresh_marketwatcher_route(
     return RedirectResponse(f"/marketwatcher?watchlist_id={watchlist_id}", status_code=303)
 
 
+def empty_filter_as_none(value: object) -> object:
+    return None if value == "" else value
+
+
+OptionalAssetFilter = Annotated[
+    int | None, Query(gt=0), BeforeValidator(empty_filter_as_none)
+]
+
+
 @app.get("/assets")
 async def assets_page(
     request: Request,
     q: str = Query("", max_length=100),
-    station: int | None = Query(None, gt=0),
-    market: int | None = Query(None, gt=0),
+    station: OptionalAssetFilter = None,
+    market: OptionalAssetFilter = None,
     page: int = Query(1, ge=1),
 ):
     _, character_id = require_account(request)
