@@ -15,12 +15,12 @@
 </form>
 {% endif %}
 {% if inventory_error %}<div class="notice error">{{ inventory_error }}</div>{% endif %}
-{% if not has_assets_scope %}
-<section class="panel"><p>Für den eigenen Blueprint-Bestand fehlt <code>esi-assets.read_assets.v1</code>. Bereits freigegebene Blueprints anderer Spieler bleiben sichtbar.</p>
+{% if not has_blueprint_scope %}
+<section class="panel"><p>Für den Blueprint-Bestand fehlt <code>esi-characters.read_blueprints.v1</code>. Bitte den Charakter mit dieser zusätzlichen EVE-Berechtigung erneut anmelden. Bereits freigegebene Blueprints anderer Spieler bleiben sichtbar.</p>
   <a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
 {% else %}
 <section class="panel">
-  <p class="hint">Teile einzelne Blueprints freiwillig mit den anderen Dashboard-Spielern. Angezeigt wird dein aktiver Charakter als Ansprechpartner für eine Ingame-Nachricht. Kopien sind als BPC markiert; ME, TE und Runs kommen aus deinem EVE-Bestand.</p>
+  <p class="hint">Teile einzelne Blueprints freiwillig mit den anderen Dashboard-Spielern. Angezeigt wird dein aktiver Charakter als Ansprechpartner für eine Ingame-Nachricht. Kopien sind als BPC markiert; ME, TE und Runs werden direkt aus dem EVE-Blueprint-Bestand synchronisiert.</p>
   <form method="get" action="/bpo-bib" class="toolbar">
     <label>Blueprint suchen<input name="q" value="{{ q }}" maxlength="100" placeholder="z. B. Dragonfly"></label>
     <label>Gruppe<select name="group"><option value="">Alle Gruppen</option>
