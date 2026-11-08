@@ -112,6 +112,20 @@ def initialize() -> None:
                 expires_at INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS bpo_library (
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                item_id INTEGER NOT NULL,
+                type_id INTEGER NOT NULL,
+                type_name TEXT NOT NULL,
+                group_name TEXT NOT NULL,
+                is_copy INTEGER NOT NULL DEFAULT 0,
+                runs INTEGER,
+                material_efficiency INTEGER,
+                time_efficiency INTEGER,
+                is_shared INTEGER NOT NULL DEFAULT 0,
+                synced_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (character_id, item_id)
+            );
             CREATE INDEX IF NOT EXISTS characters_account_id ON characters(account_id);
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -370,6 +384,74 @@ def get_character(character_id: int) -> dict | None:
         "scopes": row["scopes"].split(),
         "expires_at": row["expires_at"],
     }
+
+
+def sync_blueprint_library(character_id: int, blueprints: list[dict]) -> None:
+    with connection() as db:
+        shared = {
+            row["item_id"]: row["is_shared"]
+            for row in db.execute(
+                "SELECT item_id, is_shared FROM bpo_library WHERE character_id = ?",
+                (character_id,),
+            ).fetchall()
+        }
+        db.execute("DELETE FROM bpo_library WHERE character_id = ?", (character_id,))
+        db.executemany(
+            "INSERT INTO bpo_library("
+            "character_id, item_id, type_id, type_name, group_name, is_copy, runs, "
+            "material_efficiency, time_efficiency, is_shared"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    character_id,
+                    blueprint["item_id"],
+                    blueprint["type_id"],
+                    blueprint["type_name"],
+                    blueprint["group_name"],
+                    int(blueprint["is_copy"]),
+                    blueprint.get("runs"),
+                    blueprint.get("material_efficiency"),
+                    blueprint.get("time_efficiency"),
+                    int(shared.get(blueprint["item_id"], 0)),
+                )
+                for blueprint in blueprints
+            ],
+        )
+
+
+def blueprint_library(character_id: int) -> list[dict]:
+    with connection() as db:
+        rows = db.execute(
+            "SELECT item_id, type_id, type_name, group_name, is_copy, runs, "
+            "material_efficiency, time_efficiency, is_shared, synced_at "
+            "FROM bpo_library WHERE character_id = ? "
+            "ORDER BY group_name, type_name, is_copy, item_id",
+            (character_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def set_blueprint_shared(character_id: int, item_id: int, shared: bool) -> bool:
+    with connection() as db:
+        cursor = db.execute(
+            "UPDATE bpo_library SET is_shared = ?, "
+            "synced_at = CURRENT_TIMESTAMP WHERE character_id = ? AND item_id = ?",
+            (int(shared), character_id, item_id),
+        )
+    return cursor.rowcount > 0
+
+
+def shared_blueprint_library() -> list[dict]:
+    with connection() as db:
+        rows = db.execute(
+            "SELECT b.item_id, b.type_id, b.type_name, b.group_name, b.is_copy, b.runs, "
+            "b.material_efficiency, b.time_efficiency, b.synced_at, "
+            "c.id AS character_id, c.name AS character_name, c.account_id "
+            "FROM bpo_library b JOIN characters c ON c.id = b.character_id "
+            "WHERE b.is_shared = 1 "
+            "ORDER BY b.group_name, b.type_name, c.name",
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def list_characters(account_id: int) -> list[dict]:

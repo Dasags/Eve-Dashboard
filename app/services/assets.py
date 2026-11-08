@@ -2,6 +2,8 @@ import asyncio
 
 import httpx
 
+from app.services.sde import as_int, field
+
 
 async def blueprint_types(esi, type_ids: set[int]) -> dict[int, bool | None]:
     """Resolve the ESI category of visible non-copy assets; None means unavailable."""
@@ -31,6 +33,42 @@ async def blueprint_types(esi, type_ids: set[int]) -> dict[int, bool | None]:
         type_id: categories.get(group_id)
         for type_id, group_id in groups_by_type.items()
     }
+
+
+def blueprint_records(assets: list[dict], sde: dict[str, list[dict[str, str]]]) -> list[dict]:
+    types = {
+        as_int(row, "typeID"): row
+        for row in sde["invTypes"]
+        if as_int(row, "typeID") > 0
+    }
+    groups = {
+        as_int(row, "groupID"): row
+        for row in sde["invGroups"]
+        if as_int(row, "groupID") > 0
+    }
+    records = []
+    for asset in assets:
+        type_data = types.get(asset["type_id"])
+        if not type_data:
+            continue
+        group_id = as_int(type_data, "groupID")
+        group = groups.get(group_id)
+        if not group or as_int(group, "categoryID") != 9:
+            continue
+        copy = bool(asset.get("is_blueprint_copy", False))
+        records.append(
+            {
+                "item_id": int(asset["item_id"]),
+                "type_id": int(asset["type_id"]),
+                "type_name": field(type_data, "typeName", default=f"Type {asset['type_id']}"),
+                "group_name": field(group, "groupName", default="Blueprints"),
+                "is_copy": copy,
+                "runs": asset.get("blueprint_runs") if copy else None,
+                "material_efficiency": asset.get("material_efficiency"),
+                "time_efficiency": asset.get("time_efficiency"),
+            }
+        )
+    return records
 
 
 def assemble_assets(
