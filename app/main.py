@@ -20,7 +20,7 @@ from pydantic import BeforeValidator
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.services import storage
-from app.services.assets import assemble_assets, blueprint_records, blueprint_types
+from app.services.assets import assemble_assets, blueprint_locations, blueprint_records, blueprint_types
 from app.services.eve import SCOPE_NAMES, ESIClient, authorization_url, exchange_code
 from app.services.incursions import get_incursions
 from app.services.killfeed import get_kills
@@ -1264,6 +1264,7 @@ async def bpo_bib_page(
     character = storage.get_character(character_id)
     own = []
     inventory_error = None
+    location_warning = None
     has_blueprint_scope = "esi-characters.read_blueprints.v1" in character["scopes"]
     if has_blueprint_scope:
         try:
@@ -1271,7 +1272,94 @@ async def bpo_bib_page(
                 _character_blueprints(character_id),
                 load_sde(),
             )
-            storage.sync_blueprint_library(character_id, blueprint_records(inventory, sde_data))
+            own_records = blueprint_records(inventory, sde_data)
+            asset_inventory = []
+            if own_records and "esi-assets.read_assets.v1" in character["scopes"]:
+                try:
+                    asset_inventory = await _character_assets(character_id)
+                except (httpx.HTTPError, RuntimeError, ValueError):
+                    location_warning = (
+                        "Blueprint-Orte konnten geladen werden, Containerdetails sind momentan "
+                        "nicht über ESI erreichbar."
+                    )
+            elif own_records:
+                location_warning = (
+                    "Für Container-Namen wird zusätzlich esi-assets.read_assets.v1 benötigt. "
+                    "Aktuell werden die direkt verfügbaren Standorte angezeigt."
+                )
+            asset_by_id = {int(item["item_id"]): item for item in asset_inventory}
+            container_type_ids = set()
+            container_item_ids = set()
+            root_ids = set()
+            for record in own_records:
+                asset = asset_by_id.get(int(record["item_id"]))
+                parent_id = asset.get("location_id") if asset else record.get("location_id")
+                seen = {int(record["item_id"])}
+                while parent_id is not None and int(parent_id) in asset_by_id:
+                    parent_id = int(parent_id)
+                    if parent_id in seen:
+                        break
+                    seen.add(parent_id)
+                    parent = asset_by_id[parent_id]
+                    container_item_ids.add(parent_id)
+                    container_type_ids.add(int(parent["type_id"]))
+                    parent_id = parent.get("location_id")
+                if parent_id is not None:
+                    root_ids.add(int(parent_id))
+            location_names = {
+                int(item["location_id"]): item["name"]
+                for item in storage.list_locations()
+            }
+            names = {}
+            container_names = {}
+            try:
+                async with ESIClient(character_id) as esi:
+                    names = await resolve_names(
+                        esi, container_type_ids | {item for item in root_ids if item < 1_000_000_000_000}
+                    )
+                    for offset in range(0, len(container_item_ids), 1000):
+                        chunk = sorted(container_item_ids)[offset : offset + 1000]
+                        resolved = await esi.post(
+                            f"/characters/{character_id}/assets/names/",
+                            json=chunk,
+                        )
+                        container_names.update(
+                            {int(item["item_id"]): item["name"] for item in resolved}
+                        )
+                    for location_id, name in names.items():
+                        if location_id in root_ids:
+                            location_names[location_id] = name
+                    if "esi-universe.read_structures.v1" in character["scopes"]:
+                        semaphore = asyncio.Semaphore(5)
+
+                        async def resolve_structure(location_id: int) -> tuple[int, str | None]:
+                            try:
+                                async with semaphore:
+                                    data = await esi.get(f"/universe/structures/{location_id}/")
+                                return location_id, data.get("name")
+                            except httpx.HTTPStatusError as exc:
+                                if exc.response.status_code in {403, 404}:
+                                    return location_id, None
+                                raise
+
+                        structures = await asyncio.gather(
+                            *(
+                                resolve_structure(location_id)
+                                for location_id in root_ids
+                                if location_id >= 1_000_000_000_000
+                                and location_id not in location_names
+                            )
+                        )
+                        location_names.update(
+                            {location_id: name for location_id, name in structures if name}
+                        )
+            except (httpx.HTTPError, RuntimeError, ValueError):
+                if not location_warning:
+                    location_warning = "Einige Blueprint-Standorte konnten nicht über ESI aufgelöst werden."
+            own_records = blueprint_locations(
+                own_records, asset_inventory, names, location_names, container_names
+            )
+            storage.sync_blueprint_library(character_id, own_records)
             own = storage.blueprint_library(character_id)
         except (httpx.HTTPError, OSError, RuntimeError, ValueError, KeyError) as exc:
             inventory_error = (
@@ -1311,6 +1399,7 @@ async def bpo_bib_page(
         q=q.strip(),
         has_blueprint_scope=has_blueprint_scope,
         inventory_error=inventory_error,
+        location_warning=location_warning,
     )
 
 

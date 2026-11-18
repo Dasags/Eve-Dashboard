@@ -118,6 +118,10 @@ def initialize() -> None:
                 type_id INTEGER NOT NULL,
                 type_name TEXT NOT NULL,
                 group_name TEXT NOT NULL,
+                location_id INTEGER,
+                location_name TEXT NOT NULL DEFAULT '',
+                location_flag TEXT NOT NULL DEFAULT '',
+                container_name TEXT NOT NULL DEFAULT '',
                 is_copy INTEGER NOT NULL DEFAULT 0,
                 runs INTEGER,
                 material_efficiency INTEGER,
@@ -203,6 +207,17 @@ def initialize() -> None:
             );
             """
         )
+        bpo_columns = {
+            row["name"] for row in db.execute("PRAGMA table_info(bpo_library)").fetchall()
+        }
+        for column, definition in (
+            ("location_id", "INTEGER"),
+            ("location_name", "TEXT NOT NULL DEFAULT ''"),
+            ("location_flag", "TEXT NOT NULL DEFAULT ''"),
+            ("container_name", "TEXT NOT NULL DEFAULT ''"),
+        ):
+            if column not in bpo_columns:
+                db.execute(f"ALTER TABLE bpo_library ADD COLUMN {column} {definition}")
         db.executemany(
             "INSERT OR IGNORE INTO modules(name, enabled) VALUES (?, ?)",
             [
@@ -399,9 +414,10 @@ def sync_blueprint_library(character_id: int, blueprints: list[dict]) -> None:
         db.execute("DELETE FROM bpo_library WHERE character_id = ?", (character_id,))
         db.executemany(
             "INSERT INTO bpo_library("
-            "character_id, item_id, type_id, type_name, group_name, is_copy, runs, "
+            "character_id, item_id, type_id, type_name, group_name, location_id, location_name, "
+            "location_flag, container_name, is_copy, runs, "
             "material_efficiency, time_efficiency, is_shared"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     character_id,
@@ -409,6 +425,10 @@ def sync_blueprint_library(character_id: int, blueprints: list[dict]) -> None:
                     blueprint["type_id"],
                     blueprint["type_name"],
                     blueprint["group_name"],
+                    blueprint.get("location_id"),
+                    blueprint.get("location_name", ""),
+                    blueprint.get("location_flag", ""),
+                    blueprint.get("container_name", ""),
                     int(blueprint["is_copy"]),
                     blueprint.get("runs"),
                     blueprint.get("material_efficiency"),
@@ -423,7 +443,8 @@ def sync_blueprint_library(character_id: int, blueprints: list[dict]) -> None:
 def blueprint_library(character_id: int) -> list[dict]:
     with connection() as db:
         rows = db.execute(
-            "SELECT item_id, type_id, type_name, group_name, is_copy, runs, "
+            "SELECT item_id, type_id, type_name, group_name, location_id, location_name, "
+            "location_flag, container_name, is_copy, runs, "
             "material_efficiency, time_efficiency, is_shared, synced_at "
             "FROM bpo_library WHERE character_id = ? "
             "ORDER BY group_name, type_name, is_copy, item_id",

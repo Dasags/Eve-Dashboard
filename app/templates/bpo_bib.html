@@ -19,6 +19,7 @@
 <h1>BPO-Bib</h1>
 {% set next_url = "/bpo-bib" %}{% include "_char_tiles.html" %}
 {% if inventory_error %}<div class="notice error pi-terminal bpo-terminal">{{ inventory_error }}</div>{% endif %}
+{% if location_warning %}<div class="notice pi-terminal bpo-terminal">{{ location_warning }}</div>{% endif %}
 <section class="panel pi-terminal bpo-terminal">
   <div class="eyebrow pi-mono">BLUEPRINT-TERMINAL // FILTER</div>
   <p class="hint">Eigene BPOs und BPCs getrennt von den Freigaben anderer Spieler. Unter „Meine Blueprints“ kannst du einzelne Einträge teilen; andere sehen deinen aktiven Charakter als Ansprechpartner.</p>
@@ -42,11 +43,15 @@
 {% else %}
   <p class="hint">ME, TE und Runs werden direkt aus dem EVE-Blueprint-Bestand synchronisiert.</p>
   <h2>Meine Blueprints</h2>
-  <div class="table-wrap"><table><thead><tr><th>Gruppe</th><th>Blueprint</th><th>Typ</th><th>ME</th><th>TE</th><th>Runs</th><th>Freigabe</th></tr></thead><tbody>
+  <div class="table-wrap"><table><thead><tr><th>Gruppe</th><th>Blueprint</th><th>Typ</th><th>Ort / Container</th><th>ME</th><th>TE</th><th>Runs</th><th>Freigabe</th></tr></thead><tbody>
     {% for item in own %}
     <tr>
       <td>{{ item.group_name }}</td><td>{{ item.type_name }}</td>
       <td>{{ "BPC · Kopie" if item.is_copy else "BPO · Original" }}</td>
+      <td>{{ item.location_name or ("Unbekannter Ort (ID " ~ item.location_id ~ ")" if item.location_id else "Ort nicht verfügbar") }}
+        {% if item.location_flag %}<br><small class="muted">{{ item.location_flag }}</small>{% endif %}
+        {% if item.container_name %}<br><small>Container: {{ item.container_name }}</small>{% endif %}
+      </td>
       <td>{{ item.material_efficiency if item.material_efficiency is not none else "—" }}</td>
       <td>{{ item.time_efficiency if item.time_efficiency is not none else "—" }}</td>
       <td>{% if not item.is_copy %}Unbegrenzt{% elif item.runs is not none %}{{ item.runs }}{% else %}—{% endif %}</td>
@@ -56,7 +61,7 @@
         <button class="{{ 'danger' if item.is_shared else 'primary' }}">{{ "Freigabe zurückziehen" if item.is_shared else "Freigeben" }}</button>
       </form></td>
     </tr>
-    {% else %}<tr><td colspan="7">Keine BPOs oder BPCs im Bestand oder keine passenden Filter.</td></tr>{% endfor %}
+    {% else %}<tr><td colspan="8">Keine BPOs oder BPCs im Bestand oder keine passenden Filter.</td></tr>{% endfor %}
   </tbody></table></div>
 {% endif %}
 </section>

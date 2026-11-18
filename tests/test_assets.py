@@ -16,7 +16,7 @@ if "DATA_DIR" not in os.environ:
 from fastapi.testclient import TestClient
 
 from app import main
-from app.services.assets import assemble_assets, blueprint_records, blueprint_types
+from app.services.assets import assemble_assets, blueprint_locations, blueprint_records, blueprint_types
 from app.services.market import sell_prices
 
 
@@ -48,6 +48,7 @@ class AssetLayoutTests(unittest.TestCase):
         self.assertEqual(result[1]["runs"], 5)
         self.assertEqual(result[1]["material_efficiency"], 8)
         self.assertEqual(result[1]["time_efficiency"], 16)
+        self.assertIsNone(result[0]["location_id"])
 
     def test_blueprint_endpoint_me_te_and_runs_fields(self):
         source = [
@@ -84,6 +85,40 @@ class AssetLayoutTests(unittest.TestCase):
         self.assertTrue(rows[2]["location_missing"])
         self.assertIn("999999", rows[2]["location_name"])
         self.assertTrue(rows[3]["location_missing"])
+
+    def test_blueprint_container_ancestry_and_location_flag(self):
+        blueprints = [{
+            "item_id": 3,
+            "type_id": 10,
+            "location_id": 600001,
+            "location_flag": "Hangar",
+        }]
+        assets = [
+            {"item_id": 3, "type_id": 10, "location_id": 2, "location_type": "item", "location_flag": "Hangar"},
+            {"item_id": 2, "type_id": 21, "location_id": 1, "location_type": "item"},
+            {"item_id": 1, "type_id": 20, "location_id": 600001, "location_type": "station"},
+        ]
+        result = blueprint_locations(
+            blueprints,
+            assets,
+            {20: "Personal Hangar", 21: "Blueprint Container"},
+            {600001: "Jita IV - Moon 4"},
+        )[0]
+        self.assertEqual(result["location_id"], 600001)
+        self.assertEqual(result["location_name"], "Jita IV - Moon 4")
+        self.assertEqual(result["location_flag"], "Hangar")
+        self.assertEqual(result["container_name"], "Personal Hangar › Blueprint Container")
+
+    def test_blueprint_location_fallback_without_asset_scope(self):
+        result = blueprint_locations(
+            [{"item_id": 3, "location_id": 600001, "location_flag": "Hangar"}],
+            [],
+            {},
+            {},
+        )[0]
+        self.assertEqual(result["location_name"], "Unbekannter Ort (ID 600001)")
+        self.assertEqual(result["container_name"], "")
+        self.assertEqual(result["location_flag"], "Hangar")
 
     def test_asset_pagination_fetches_all_esi_pages(self):
         class Response:
@@ -291,6 +326,60 @@ class BlueprintLibraryRouteTests(unittest.TestCase):
         self.assertIn('name="tab" value="shared"', response.text)
         self.assertIn("BLUEPRINT-TERMINAL // FILTER", response.text)
         self.assertIn('class="panel pi-terminal bpo-terminal bpo-tab-panel"', response.text)
+        self.assertIn("Ort / Container", response.text)
+        self.assertIn("Container-Namen wird zusätzlich esi-assets.read_assets.v1 benötigt", response.text)
+
+    def test_sync_includes_resolved_blueprint_location_and_container(self):
+        character = {"scopes": [
+            "esi-characters.read_blueprints.v1",
+            "esi-assets.read_assets.v1",
+        ]}
+        assets = [
+            {"item_id": 11, "type_id": 1, "location_id": 200, "location_type": "item", "location_flag": "Hangar"},
+            {"item_id": 200, "type_id": 20, "location_id": 60003760, "location_type": "station"},
+        ]
+        client = type("Client", (), {})()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+        with (
+            patch("app.main.storage.get_character", return_value=character),
+            patch("app.main._character_assets", new=AsyncMock(return_value=assets)),
+            patch("app.main.storage.list_locations", return_value=[]),
+            patch("app.main.resolve_names", new=AsyncMock(return_value={
+                20: "Secure Container",
+                60003760: "Jita IV - Moon 4",
+            })),
+            patch("app.main.ESIClient") as esi_client,
+            patch("app.main.storage.sync_blueprint_library") as sync,
+            patch("app.main.storage.blueprint_library", return_value=[{
+                "item_id": 11,
+                "type_id": 1,
+                "type_name": "Acolyte Blueprint",
+                "group_name": "Drone Blueprints",
+                "location_id": 60003760,
+                "location_name": "Jita IV - Moon 4",
+                "location_flag": "Hangar",
+                "container_name": "BPO Storage",
+                "is_copy": 0,
+                "runs": None,
+                "material_efficiency": 10,
+                "time_efficiency": 20,
+                "is_shared": 0,
+            }]),
+        ):
+            esi = AsyncMock()
+            esi.__aenter__.return_value = esi
+            esi.__aexit__.return_value = None
+            esi.post.return_value = [{"item_id": 200, "name": "BPO Storage"}]
+            esi_client.return_value = esi
+            response = self.client.get("/bpo-bib")
+        self.assertEqual(response.status_code, 200)
+        record = sync.call_args.args[1][0]
+        self.assertEqual(record["location_name"], "Jita IV - Moon 4")
+        self.assertEqual(record["container_name"], "BPO Storage")
+        self.assertEqual(record["location_flag"], "Hangar")
+        self.assertIn("Jita IV - Moon 4", response.text)
+        self.assertIn("Container: BPO Storage", response.text)
 
     def test_blueprint_api_scope_is_requested_for_existing_characters(self):
         from app.services.eve import SCOPE_NAMES
