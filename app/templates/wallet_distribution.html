@@ -2,17 +2,7 @@
 {% block title %}Wallet-Verteilung – {{ app_name }}{% endblock %}
 {% block content %}
 <div class="eyebrow">Char-Dashboard · Wallet</div><h1>Wallet-Verteilung – {{ active_character.name if active_character else "Charakter" }}</h1>
-{% if characters|length > 1 %}
-<form method="post" action="/auth/chars/select" class="toolbar" style="margin-bottom:1rem">
-  <input type="hidden" name="next" value="/wallet/distribution">
-  <label style="display:flex;align-items:center;gap:.6rem">Charakter
-    <select name="character_id" onchange="this.form.submit()">
-      {% for character in characters %}<option value="{{ character.id }}" {% if active_character and active_character.id == character.id %}selected{% endif %}>{{ character.name }}{% if character.is_main %} (Main){% endif %}</option>{% endfor %}
-    </select>
-  </label>
-  <noscript><button>Wechseln</button></noscript>
-</form>
-{% endif %}
+{% set next_url = "/wallet/distribution" %}{% include "_char_tiles.html" %}
 <div class="grid three">
   <section class="panel"><div class="eyebrow">Aktueller Kontostand (berechnet)</div>
     <strong style="font-size:1.6rem;color:{{ '#ff8490' if current_balance < 0 else '#67d69c' }}">{{ current_balance|isk }} ISK</strong>
