@@ -13,7 +13,7 @@ Ein webbasiertes EVE-Online-Dashboard mit EVE-SSO-Anmeldung, Charakteren und Pro
 - **BPO-Bib:** Eigene BPOs/BPCs nach SDE-Gruppen mit Materialeffizienz (ME), Zeiteffizienz (TE) und BPC-Runs. Einzelne Blueprints können für andere Dashboard-Spieler freigegeben werden; die freigegebene Liste zeigt den EVE-Charakter als Ingame-Ansprechpartner.
 - **Marketwatcher:** mehrere Itemlisten, EFT-Fitting-Import, Preise an NPC-Stationen oder Structures und Preisverlauf.
 - **Industry:** Materialbedarf, optionale Komponentenfertigung, Charakter-Assetbestand, Produktionszeiten und Kostenschätzung.
-- **Planetary Industry:** PI-Ketten mit wählbarer Einkaufsstufe, Zykluszeiten und Preisvergleich je Standort.
+- **Planetary Industry:** PI-Ketten mit wählbarer Einkaufsstufe, Zykluszeiten und Preisvergleich je Standort. Reiter „Kolonien“ zeigt als PI-Terminal die echten Kolonien des Charakters (Extraktor-Restzeiten, Fabriken, Status grün/gelb/rot) und benötigt `esi-planets.manage_planets.v1` (erneute EVE-SSO-Anmeldung nötig).
 - **Incursions:** aktuelle Incursion-Daten aus ESI.
 - **Administration:** Passwort- oder optionaler Authentik-OIDC-Login, Module, Standorte und Startseiten-Einstellungen.
 
@@ -33,6 +33,7 @@ Die BPO-Bib benötigt `esi-characters.read_blueprints.v1` für den ausgewählten
    - `esi-wallet.read_character_wallet.v1`
    - `esi-assets.read_assets.v1`
    - `esi-characters.read_blueprints.v1`
+   - `esi-planets.manage_planets.v1`
    - `esi-markets.structure_markets.v1`
    - `esi-universe.read_structures.v1`
 4. `EVE_CLIENT_ID`, `EVE_CLIENT_SECRET` und `PUBLIC_URL` in Compose/Dockhand konfigurieren.

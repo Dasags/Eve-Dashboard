@@ -1,7 +1,79 @@
 {% extends "base.html" %}
 {% block title %}Planetary Industry – {{ app_name }}{% endblock %}
+{% block head %}
+<style>
+  .bpo-tabs { display:flex; flex-wrap:wrap; gap:.6rem; margin-top:1rem; }
+  .bpo-tabs [aria-selected="true"] { border-color:#4774a2; background:#17304a; }
+  .pi-mono { font-family:ui-monospace,Consolas,monospace; letter-spacing:.06em; }
+  .pi-focus { display:flex; flex-wrap:wrap; gap:1.5rem; align-items:center; margin:1rem 0; }
+  .pi-focus > div { flex:1; min-width:260px; }
+  .pi-line { display:flex; justify-content:space-between; gap:1rem; padding:.4rem .7rem; margin:.3rem 0; border-left:3px solid #3ddc97; background:rgb(61 220 151 / 8%); }
+  .pi-line.soon { border-color:#f2c94c; background:rgb(242 201 76 / 8%); }
+  .pi-line.expired { border-color:#ef5350; background:rgb(239 83 80 / 8%); }
+  .pi-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:.7rem; }
+  .pi-card { display:flex; gap:.7rem; align-items:center; padding:.6rem; border:1px solid #3ddc97; border-radius:8px; color:inherit; text-decoration:none; background:rgb(10 18 32 / 38%); }
+  .pi-card.soon { border-color:#f2c94c; } .pi-card.expired { border-color:#ef5350; } .pi-card.idle { border-color:#4774a2; }
+  .pi-card.active { box-shadow:0 0 0 2px rgb(255 255 255 / 25%); }
+  .pi-ring .track { fill:none; stroke:rgb(255 255 255 / 12%); stroke-width:5; }
+  .pi-ring .arc { fill:none; stroke:#3ddc97; stroke-width:5; stroke-linecap:round; }
+  .pi-ring.soon .arc { stroke:#f2c94c; } .pi-ring.expired .arc { stroke:#ef5350; } .pi-ring.idle .arc { stroke:#4774a2; }
+  .pi-ring .planet { fill:#6b7a8f; }
+  .pt-temperate { fill:#4f9d69 !important; } .pt-ice { fill:#bfe3f2 !important; } .pt-gas { fill:#d9a05b !important; }
+  .pt-oceanic { fill:#2f6fb5 !important; } .pt-lava { fill:#d9542b !important; } .pt-barren { fill:#a38b6d !important; }
+  .pt-storm { fill:#7f6fb5 !important; } .pt-plasma { fill:#e0457b !important; }
+</style>
+{% endblock %}
 {% block content %}
+{% macro ring(colony, size) %}
+{% set left = colony.seconds_left %}
+{% set frac = 0 if left is none or left <= 0 else ([left / 345600, 1]|min) %}
+<svg class="pi-ring {{ colony.status }}" width="{{ size }}" height="{{ size }}" viewBox="0 0 100 100" aria-hidden="true">
+  <circle cx="50" cy="50" r="44" class="track"/>
+  <circle cx="50" cy="50" r="44" class="arc" pathLength="100" stroke-dasharray="{{ (frac * 100)|round(1) }} 100" transform="rotate(-90 50 50)"/>
+  <circle cx="50" cy="50" r="28" class="planet pt-{{ colony.planet_type_key }}"/>
+</svg>
+{% endmacro %}
 <div class="eyebrow">Char-Dashboard · Produktion</div><h1>Planetary Industry</h1>
+<div class="bpo-tabs" role="tablist" aria-label="PI-Bereiche">
+  <a class="button {{ 'primary' if selected_tab == 'colonies' else '' }}" role="tab" aria-selected="{{ 'true' if selected_tab == 'colonies' else 'false' }}" href="/planetary-industry?tab=colonies">Kolonien ({{ overview.colonies|length if selected_tab == 'colonies' else '…' }})</a>
+  <a class="button {{ 'primary' if selected_tab == 'calc' else '' }}" role="tab" aria-selected="{{ 'true' if selected_tab == 'calc' else 'false' }}" href="/planetary-industry?tab=calc">Rechner</a>
+</div>
+{% if selected_tab == "colonies" %}
+<section class="panel pi-terminal" style="margin-top:1rem">
+  <div class="eyebrow pi-mono">PI-TERMINAL // KOLONIE-ÜBERSICHT</div>
+  {% if not overview.has_scope %}
+    <p>Für die Kolonien fehlt <code>esi-planets.manage_planets.v1</code>. Bitte den Charakter mit dieser zusätzlichen EVE-Berechtigung erneut anmelden.</p>
+    <a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a>
+  {% elif overview.error %}<p class="notice">{{ overview.error }}</p>
+  {% elif not overview.colonies %}<p class="hint">Dieser Charakter hat keine Kolonien.</p>
+  {% else %}
+    <div class="pi-focus">
+      {{ ring(focus, 220) }}
+      <div>
+        <h2 class="pi-mono">{{ focus.planet_name }} · {{ focus.planet_type }} · CC-Stufe {{ focus.command_center_level }}</h2>
+        <p class="hint">{{ focus.system_name }} · {{ focus.pin_count }} Strukturen</p>
+        {% for e in focus.extractors %}
+        <div class="pi-line {{ 'expired' if e.seconds_left is none or e.seconds_left <= 0 else ('soon' if e.seconds_left < 86400 else 'running') }}">
+          <span>{{ e.product }} <small>({{ e.heads }} Köpfe)</small></span>
+          <strong>{% if e.seconds_left is none or e.seconds_left <= 0 %}abgelaufen{% else %}noch {{ e.seconds_left|duration }}{% endif %}</strong>
+        </div>
+        {% else %}<p class="hint">Keine Extraktoren.</p>{% endfor %}
+        {% if focus.factory_list %}<div class="pi-line running"><span>Fabriken</span><strong>{% for f in focus.factory_list %}{{ f.count }}× {{ f.name }}{% if not loop.last %} · {% endif %}{% endfor %}</strong></div>{% endif %}
+      </div>
+    </div>
+    <div class="pi-cards">
+      {% for c in overview.colonies %}
+      <a class="pi-card {{ c.status }} {{ 'active' if c.planet_id == focus.planet_id else '' }}" href="/planetary-industry?tab=colonies&planet={{ c.planet_id }}">
+        {{ ring(c, 64) }}
+        <span><strong>{{ c.planet_name }}</strong><br><small>{{ c.planet_type }}</small><br>
+        <small>{% if c.status == 'idle' %}keine Extraktoren{% elif c.status == 'expired' %}abgelaufen{% else %}{{ c.seconds_left|duration }}{% endif %}</small></span>
+      </a>
+      {% endfor %}
+    </div>
+    <p class="hint">Grün = läuft, gelb = läuft in unter 24 h ab, rot = abgelaufen. Daten aus ESI (kurz zwischengespeichert).</p>
+  {% endif %}
+</section>
+{% else %}
 <form method="post" action="/planetary-industry/calculate">
   <section class="panel">
     <div class="form-grid">
@@ -151,5 +223,6 @@
     </tbody></table></div>
     <p class="hint">Schemata und Zyklen kommen aus dem Fuzzwork-SDE. Marktpreise (niedrigster Verkaufspreis je Standort) stammen aus der ESI-API; fehlende Preise werden nicht als 0 ISK bewertet.</p>
   </section>
+{% endif %}
 {% endif %}
 {% endblock %}

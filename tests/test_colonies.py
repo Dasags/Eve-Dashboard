@@ -1,0 +1,105 @@
+import os
+import atexit
+import shutil
+import tempfile
+import unittest
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, patch
+
+os.environ.setdefault("SESSION_SECRET", "test-session-secret")
+os.environ.setdefault("COOKIE_SECURE", "false")
+if "DATA_DIR" not in os.environ:
+    test_data_dir = tempfile.mkdtemp(prefix="eve-dashboard-colony-tests-")
+    os.environ["DATA_DIR"] = test_data_dir
+    atexit.register(shutil.rmtree, test_data_dir, ignore_errors=True)
+
+from fastapi.testclient import TestClient
+
+from app import main
+from app.services.colonies import SCOPE, summarize
+
+NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
+SUMMARY = {"planet_id": 5, "solar_system_id": 9, "planet_type": "temperate", "upgrade_level": 5, "num_pins": 3}
+
+
+def detail(*expiries):
+    pins = [
+        {"extractor_details": {"product_type_id": 7, "heads": [{}, {}]}, "expiry_time": e}
+        for e in expiries
+    ]
+    pins.append({"factory_details": {"schematic_id": 70}})
+    return {"pins": pins}
+
+
+class ColonySummaryTests(unittest.TestCase):
+    def test_running_soon_and_expired_status(self):
+        running = summarize(SUMMARY, detail("2026-01-03T00:00:00Z"), NOW)
+        soon = summarize(SUMMARY, detail("2026-01-01T05:00:00Z", "2026-01-04T00:00:00Z"), NOW)
+        expired = summarize(SUMMARY, detail("2025-12-31T00:00:00Z"), NOW)
+        self.assertEqual(running["status"], "running")
+        self.assertEqual(soon["status"], "soon")
+        self.assertEqual(soon["seconds_left"], 5 * 3600)
+        self.assertEqual(expired["status"], "expired")
+        self.assertEqual(running["factories"], {70: 1})
+        self.assertEqual(running["extractors"][0]["heads"], 2)
+
+    def test_colony_without_extractors_is_idle(self):
+        self.assertEqual(summarize(SUMMARY, {"pins": []}, NOW)["status"], "idle")
+
+
+class ColonyPageTests(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(main.app)
+        self.patches = [
+            patch("app.main.require_account", return_value=(1, 123)),
+            patch("app.main.require_module"),
+            patch("app.main.pi_products", new=AsyncMock(return_value=[])),
+        ]
+        for item in self.patches:
+            item.start()
+            self.addCleanup(item.stop)
+
+    def test_missing_scope_asks_for_new_login(self):
+        with patch("app.main.storage.get_character", return_value={"scopes": []}):
+            response = self.client.get("/planetary-industry")
+        self.assertIn(SCOPE, response.text)
+        self.assertIn("erneut anmelden", response.text)
+
+    def test_colonies_render_with_timer_and_status(self):
+        colonies = [
+            {"planet_id": 5, "system_id": 9, "planet_type": "Temperate", "planet_type_key": "temperate",
+             "command_center_level": 5, "pin_count": 3, "factories": {70: 2}, "seconds_left": 3600 * 50,
+             "status": "running", "expiry_time": None,
+             "extractors": [{"product_type_id": 7, "seconds_left": 3600 * 50, "heads": 4, "expiry_time": None}]},
+            {"planet_id": 6, "system_id": 9, "planet_type": "Lava", "planet_type_key": "lava",
+             "command_center_level": 4, "pin_count": 2, "factories": {}, "seconds_left": -5,
+             "status": "expired", "expiry_time": None,
+             "extractors": [{"product_type_id": 7, "seconds_left": -5, "heads": 1, "expiry_time": None}]},
+        ]
+        esi = AsyncMock()
+        esi.get = AsyncMock(return_value={"schematic_name": "Synthetic Oil"})
+        esi.__aenter__.return_value = esi
+        names = {5: "Alentene VII", 6: "Alentene II", 9: "Alentene", 7: "Proteins"}
+        with (
+            patch("app.main.storage.get_character", return_value={"scopes": [SCOPE]}),
+            patch("app.main.ESIClient", return_value=esi),
+            patch("app.main.load_colonies", new=AsyncMock(return_value=colonies)),
+            patch("app.main.resolve_names", new=AsyncMock(return_value=names)),
+        ):
+            response = self.client.get("/planetary-industry")
+            second = self.client.get("/planetary-industry?planet=6")
+            calc = self.client.get("/planetary-industry?tab=calc")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("PI-TERMINAL", response.text)
+        self.assertIn("Alentene VII", response.text)
+        self.assertIn("CC-Stufe 5", response.text)
+        self.assertIn("2d 2h 0m", response.text)
+        self.assertIn("2× Synthetic Oil", response.text)
+        self.assertIn("abgelaufen", response.text)
+        self.assertIn("CC-Stufe 4", second.text)
+        self.assertNotIn("PI-TERMINAL", calc.text)
+        self.assertIn("Produktionskette berechnen", calc.text)
+
+
+if __name__ == "__main__":
+    unittest.main()
