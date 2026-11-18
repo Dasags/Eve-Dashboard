@@ -24,9 +24,35 @@
   .pt-temperate { fill:#4f9d69 !important; } .pt-ice { fill:#bfe3f2 !important; } .pt-gas { fill:#d9a05b !important; }
   .pt-oceanic { fill:#2f6fb5 !important; } .pt-lava { fill:#d9542b !important; } .pt-barren { fill:#a38b6d !important; }
   .pt-storm { fill:#7f6fb5 !important; } .pt-plasma { fill:#e0457b !important; }
+  .pi-terminal { position:relative; border-color:rgb(61 220 151 / 35%); box-shadow:0 0 26px rgb(61 220 151 / 8%) inset; background:linear-gradient(180deg,rgb(8 22 24 / 55%),rgb(6 12 22 / 55%)); }
+  .pi-terminal::before,.pi-terminal::after { content:""; position:absolute; width:18px; height:18px; border:2px solid #3ddc97; pointer-events:none; }
+  .pi-terminal::before { top:-1px; left:-1px; border-right:0; border-bottom:0; border-top-left-radius:.85rem; }
+  .pi-terminal::after { bottom:-1px; right:-1px; border-left:0; border-top:0; border-bottom-right-radius:.85rem; }
+  .pi-terminal > .eyebrow { color:#3ddc97; text-shadow:0 0 8px rgb(61 220 151 / 60%); }
+  .pi-terminal h2 { color:#c8ffe6; text-shadow:0 0 10px rgb(61 220 151 / 35%); text-transform:uppercase; font-size:1.05rem; }
+  .pi-focus > svg { flex:none; filter:drop-shadow(0 0 14px rgb(61 220 151 / 45%)); }
+  .pi-ring .arc { filter:drop-shadow(0 0 3px currentColor); color:#3ddc97; }
+  .pi-ring.soon .arc { color:#f2c94c; } .pi-ring.expired .arc { color:#ef5350; } .pi-ring.idle .arc { color:#4774a2; }
+  .pi-ring .orbit { fill:none; stroke:rgb(61 220 151 / 35%); stroke-width:.6; stroke-dasharray:2 5; transform-origin:50px 50px; animation:pi-spin 40s linear infinite; }
+  .pi-ring.expired .orbit { stroke:rgb(239 83 80 / 45%); } .pi-ring.soon .orbit { stroke:rgb(242 201 76 / 45%); }
+  .pi-ring.expired .arc,.pi-card.expired,.pi-line.expired { animation:pi-pulse 2s ease-in-out infinite; }
+  .pi-ring .planet { transform-origin:50px 50px; }
+  .pi-line,.pi-factory { border-radius:2px; box-shadow:0 0 12px rgb(61 220 151 / 7%) inset; }
+  .pi-line.soon,.pi-factory.soon { box-shadow:0 0 12px rgb(242 201 76 / 7%) inset; }
+  .pi-line strong { font-family:ui-monospace,Consolas,monospace; color:#c8ffe6; }
+  .pi-card { transition:transform .15s,box-shadow .15s; box-shadow:0 0 12px rgb(61 220 151 / 12%); }
+  .pi-card.soon { box-shadow:0 0 12px rgb(242 201 76 / 15%); } .pi-card.expired { box-shadow:0 0 12px rgb(239 83 80 / 18%); }
+  .pi-card:hover { transform:translateY(-2px); }
+  .pi-card small { font-family:ui-monospace,Consolas,monospace; color:#9fb0c4; }
+  @keyframes pi-spin { to { transform:rotate(360deg); } }
+  @keyframes pi-pulse { 50% { opacity:.55; } }
+  @media (prefers-reduced-motion:reduce) { .pi-ring .orbit,.pi-ring .arc,.pi-card,.pi-line { animation:none !important; } }
 </style>
 {% endblock %}
 {% block content %}
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <radialGradient id="pi-shade" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".7"/></radialGradient>
+</defs></svg>
 {% macro mini_ring(status, frac) %}
 <svg class="pi-ring {{ status }}" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true">
   <circle cx="50" cy="50" r="40" class="track"/>
@@ -39,7 +65,9 @@
 <svg class="pi-ring {{ colony.status }}" width="{{ size }}" height="{{ size }}" viewBox="0 0 100 100" aria-hidden="true">
   <circle cx="50" cy="50" r="44" class="track"/>
   <circle cx="50" cy="50" r="44" class="arc" pathLength="100" stroke-dasharray="{{ (frac * 100)|round(1) }} 100" transform="rotate(-90 50 50)"/>
+  <circle cx="50" cy="50" r="49" class="orbit"/>
   <circle cx="50" cy="50" r="28" class="planet pt-{{ colony.planet_type_key }}"/>
+  <circle cx="50" cy="50" r="28" fill="url(#pi-shade)"/>
 </svg>
 {% endmacro %}
 <div class="eyebrow">Char-Dashboard · Produktion</div><h1>Planetary Industry</h1>
