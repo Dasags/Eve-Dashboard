@@ -928,6 +928,7 @@ async def fitting_catalog_api(
     request: Request,
     q: str = Query("", max_length=80),
     category: str = Query("ships"),
+    group_id: int = Query(0, ge=0),
 ):
     require_account(request)
     require_module(request, "fitting")
@@ -951,6 +952,8 @@ async def fitting_catalog_api(
             continue
         group = group_rows.get(as_int(row, "groupID", "group_id"), {})
         if as_int(group, "categoryID", "category_id") not in category_ids:
+            continue
+        if group_id and as_int(row, "groupID", "group_id") != group_id:
             continue
         item = fitting_catalog_item(
             type_id, row, {as_int(group, "groupID", "group_id"): field(group, "groupName", "group_name")}
