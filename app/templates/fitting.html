@@ -61,6 +61,33 @@
   .fit-fleet-row > div { flex:1;min-width:0; }
   .fit-chart { width:100%;height:220px;display:block; }
   .fit-error { color:#ffc8cc; }
+  .fit-workspace { display:grid;grid-template-columns:minmax(260px, .7fr) minmax(390px, 1.3fr) minmax(230px, .55fr);gap:.8rem;margin-top:1rem;align-items:start; }
+  .fit-workspace > * { min-width:0; }
+  .fit-editor { text-align:center; }
+  .fit-editor-head { display:flex;justify-content:space-between;align-items:center;gap:.5rem;text-align:left; }
+  .fit-wheel { position:relative;width:min(100%, 500px);aspect-ratio:1;margin:1.4rem auto; }
+  .fit-ship { position:absolute;inset:13%;display:flex;flex-direction:column;justify-content:center;align-items:center;border:1px solid rgb(117 199 214 / 45%);border-radius:50%;margin:0;padding:8%;background:radial-gradient(circle at 50% 40%,rgb(69 146 169 / 24%),rgb(3 14 24 / 90%) 72%);box-shadow:0 0 0 13px rgb(5 19 25 / 85%),0 0 0 15px rgb(61 220 151 / 20%),inset 0 0 35px rgb(77 177 191 / 15%); }
+  .fit-ship img { width:80%;height:65%;object-fit:contain;filter:drop-shadow(0 0 15px rgb(130 210 235 / 30%)); }
+  .fit-wheel-slot { position:absolute;z-index:2;transform:translate(-50%,-50%);width:7%;height:7%;max-width:40px;max-height:40px;border:1px solid #6c929d;background:#10242d;color:#a6d9cd;border-radius:4px;display:grid;place-items:center; }
+  .fit-wheel-slot img { width:80%;height:80%;object-fit:contain; }
+  .fit-wheel-slot .fit-remove { position:absolute;right:-5px;top:-7px;min-height:0;padding:0;width:17px;height:17px;line-height:15px;border-radius:50%;font-size:.75rem;color:#ffc8cc;background:#3c1b25; }
+  .fit-slot-key { display:flex;justify-content:center;gap:.8rem;flex-wrap:wrap;font-size:.73rem;color:#a5bac6; }
+  .fit-slot-key span::before { content:"";display:inline-block;width:.55rem;height:.55rem;margin-right:.3rem;background:var(--slot-color); }
+  .fit-wheel-slot[data-slot="high"] { border-color:#84cad9; }
+  .fit-wheel-slot[data-slot="medium"] { border-color:#83d6ac; }
+  .fit-wheel-slot[data-slot="low"] { border-color:#d6be83; }
+  .fit-extra-slots { display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.5rem;text-align:left;margin-top:1rem; }
+  .fit-extra-slots .fit-slot { min-height:0; }
+  .fit-extra-target { border:1px dashed rgb(120 160 220 / 30%);min-height:2rem;padding:.3rem;margin-top:.25rem;font-size:.75rem; }
+  .fit-stat-panel { text-align:left; }
+  .fit-stat-section { margin-bottom:.6rem; }
+  .fit-stat-section h3 { margin:0;padding:.3rem .45rem;background:rgb(130 170 180 / 12%);font-size:.8rem;color:#c5e1df; }
+  .fit-stat-line { display:flex;justify-content:space-between;gap:.5rem;padding:.22rem .35rem;font-size:.77rem; }
+  .fit-stat-line span:first-child { color:#a0b0bd; }
+  .fit-resist { display:flex;gap:.3rem;flex-wrap:wrap;padding:.1rem .35rem .4rem;color:#a6c5cc;font-size:.7rem; }
+  .fit-stat-note { font-size:.72rem;color:#90a2ac; }
+  @media(max-width:1150px) { .fit-workspace { grid-template-columns:minmax(260px,.8fr) minmax(390px,1.2fr); } .fit-stat-panel { grid-column:1 / -1;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.5rem; } }
+  @media(max-width:740px) { .fit-workspace { grid-template-columns:1fr; } .fit-stat-panel { grid-column:auto; } }
   @media(max-width:850px) { .fit-grid { grid-template-columns:1fr; } .fit-catalog-tree { height:360px; } }
   @media(max-width:560px) { .fit-slot-groups { grid-template-columns:1fr; } .fit-meter { grid-template-columns:75px 1fr 75px;font-size:.72rem; } }
 </style>
@@ -71,7 +98,7 @@
 <section class="fit-shell">
   <div class="fit-title">FIT TERMINAL // FLEET COMPOSITION</div>
   <p class="hint">Wähle links eine Kategorie und öffne eine Gruppe. Ziehe Schiffe in den Rumpf und Module direkt in den gewünschten Slot.</p>
-  <div class="fit-grid">
+  <div class="fit-workspace">
     <div class="fit-panel fit-catalog">
       <div class="fit-title">AUSRÜSTUNG // KATALOG</div>
       <div class="fit-category-tabs" role="tablist" aria-label="Ausrüstungskategorien">
@@ -86,27 +113,29 @@
       <div id="fit-catalog-tree" class="fit-catalog-tree" aria-label="Ausrüstung nach Gruppe"></div>
       <p class="fit-drop-hint">Eintrag anklicken oder mit der Maus ins Fitting ziehen.</p>
     </div>
-    <div class="fit-panel">
-      <div style="display:flex;justify-content:space-between;gap:.6rem;align-items:center;flex-wrap:wrap">
+    <div class="fit-panel fit-editor">
+      <div class="fit-editor-head">
         <h2 class="fit-title">Aktives Fitting</h2>
-        <button id="fit-clear" type="button">Fitting leeren</button>
+        <div><button id="fit-refresh" type="button">Rumpfwerte aktualisieren</button> <button id="fit-clear" type="button">Fitting leeren</button></div>
       </div>
-      <div id="fit-ship-drop" class="fit-ship fit-drop-target">
-        <div><strong>Schiff hier ablegen</strong><small>Auswahl aus dem Rümpfe-Katalog links</small></div>
+      <div class="fit-wheel">
+        <div id="fit-ship-drop" class="fit-ship fit-drop-target">
+          <div><strong>Schiff hier ablegen</strong><small>Auswahl aus dem Rümpfe-Katalog links</small></div>
+        </div>
+        <div id="fit-slots"></div>
       </div>
+      <div class="fit-slot-key"><span style="--slot-color:#84cad9">High</span><span style="--slot-color:#83d6ac">Mid</span><span style="--slot-color:#d6be83">Low</span></div>
+      <div id="fit-extra-slots" class="fit-extra-slots"></div>
       <div id="fit-meters"></div>
-      <div class="fit-results" id="fit-base-stats"></div>
-      <div class="fit-slot-groups" id="fit-slots"></div>
       <div id="fit-warning" class="notice" hidden></div>
-      <h3 class="fit-mono" style="margin-top:1rem">FIT-RESSOURCEN</h3>
-      <div id="fit-resource-meters"></div>
-      <p class="fit-drop-hint">Module und Ladungen können direkt in einen Slot gezogen werden.</p>
+      <p class="fit-drop-hint">Module auf einen passenden freien Slot ziehen oder im Katalog anklicken. Belegte Slots lassen sich mit × leeren.</p>
       <div class="fit-actions">
         <label>Flottenmenge<input id="fit-quantity" type="number" min="1" max="10000" value="1"></label>
         <label>Fit-Name<input id="fit-name" maxlength="60" placeholder="z. B. Shield Fleet"></label>
         <button class="primary" id="fit-add-fleet" type="button">Fitting zur Flotte</button>
       </div>
     </div>
+    <aside id="fit-base-stats" class="fit-panel fit-stat-panel" aria-label="Schiffseigenschaften"></aside>
   </div>
 </section>
 <section class="fit-shell" style="margin-top:1rem">
@@ -181,47 +210,106 @@
       if (wasChecked && catalogCategory === "modules") loadGroups();
     }
   }
+  function slotLimits(ship) {
+    return {high:attr(ship,"high_slots"),medium:attr(ship,"medium_slots"),low:attr(ship,"low_slots"),rig:attr(ship,"rig_slots"),subsystem:attr(ship,"subsystem_slots")};
+  }
+  function arrangeSlots() {
+    const limits = slotLimits(state.active.ship);
+    const ids = new Set();
+    for (const item of state.active.modules) {
+      if (!item.instanceId || ids.has(item.instanceId)) item.instanceId=makeId();
+      ids.add(item.instanceId);
+    }
+    for (const [slot,limit] of Object.entries(limits)) {
+      const modules = state.active.modules.filter(item=>item.slot===slot);
+      const used = new Set();
+      for (const item of modules) {
+        if (Number.isInteger(item.slotIndex) && item.slotIndex>=0 && item.slotIndex<limit && !used.has(item.slotIndex)) used.add(item.slotIndex);
+        else item.slotIndex = null;
+      }
+      for (const item of modules) {
+        if (item.slotIndex !== null) continue;
+        const index = Array.from({length:limit},(_,i)=>i).find(i=>!used.has(i));
+        if (index !== undefined) { item.slotIndex=index; used.add(index); }
+      }
+    }
+  }
+  function statValue(ship, key, unit="", divisor=1) {
+    const value=ship?.attributes?.[key];
+    if (value === null || value === undefined || !Number.isFinite(Number(value))) return "—";
+    return `${(Number(value)/divisor).toLocaleString("de-DE",{maximumFractionDigits:2})}${unit ? " "+unit : ""}`;
+  }
+  function resistances(ship, layer) {
+    return ["em","thermal","kinetic","explosive"].map(key=>{
+      const value=ship?.attributes?.[`${layer}_${key}`];
+      return `${key.toUpperCase()} ${value === null || value === undefined ? "—" : `${((1-Number(value))*100).toLocaleString("de-DE",{maximumFractionDigits:1})}%`}`;
+    }).join(" · ");
+  }
+  function renderShipStats(ship) {
+    if (!ship) { $("fit-base-stats").innerHTML='<p class="fit-stat-note">Schiff auswählen, um seine Eigenschaften zu sehen.</p>'; return; }
+    const sections = [
+      ["Energiespeicher",[["Kapazität","capacitor","GJ"],["Aufladezeit","capacitor_recharge","s",1000]]],
+      ["Zielaufschaltung",[["Reichweite","target_range","km",1000],["Scanauflösung","scan_resolution","mm"],["Signaturradius","signature_radius","m"],["Max. Ziele","max_targets",""]]],
+      ["Navigation",[["Geschwindigkeit","max_velocity","m/s"],["Masse","mass","kg"],["Laderaum","cargo_capacity","m³"]]],
+      ["Drohnen",[["Drohnenhangar","drone_capacity","m³"],["Bandbreite","drone_bandwidth","Mbit/s"]]],
+      ["Waffenplätze",[["Turrets","turret_hardpoints",""],["Launcher","launcher_hardpoints",""]]],
+    ];
+    const defense = `<section class="fit-stat-section"><h3>Verteidigung · Basisresistenzen</h3>${[["Schild","shield"],["Panzerung","armor"],["Struktur","hull"]].map(([label,layer])=>`<div class="fit-stat-line"><span>${label}</span><strong>${statValue(ship,`${layer}_hp`,"HP")}</strong></div><div class="fit-resist">${resistances(ship,layer)}</div>`).join("")}</section>`;
+    $("fit-base-stats").innerHTML = sections.map(([title,rows],index)=>`${index===1 ? defense : ""}<section class="fit-stat-section"><h3>${title}</h3>${rows.map(([label,key,unit,divisor])=>`<div class="fit-stat-line"><span>${label}</span><strong>${statValue(ship,key,unit,divisor)}</strong></div>`).join("")}</section>`).join("") + '<p class="fit-stat-note">Basiswerte des Rumpfs aus ESI. Skills und Modulboni sowie DPS und Stabilität werden nicht simuliert. Bei älteren gespeicherten Fits fehlende Werte über „Rumpfwerte aktualisieren“ laden.</p>';
+  }
+  function moduleTile(item, slot, index) {
+    const label = `${slotNames[slot]} ${index+1}${item ? ": "+item.name : ": leer"}`;
+    return `<div class="fit-wheel-slot" data-slot="${slot}" data-index="${index}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${item ? `<img src="https://images.evetech.net/types/${item.id}/icon?size=64" alt=""><button class="fit-remove" type="button" data-remove-id="${escapeHtml(item.instanceId)}" aria-label="${escapeHtml(item.name)} entfernen">×</button>` : `<span aria-hidden="true">+</span>`}</div>`;
+  }
   function renderFit() {
     syncHullFilter();
     const ship = state.active.ship;
     $("fit-meters").innerHTML = "";
-    $("fit-base-stats").innerHTML = "";
+    renderShipStats(ship);
     if (!ship) {
       $("fit-ship-drop").innerHTML = "<div><strong>Schiff hier ablegen</strong><small>Auswahl aus dem Rümpfe-Katalog links</small></div>";
-      $("fit-slots").innerHTML = '<p class="hint">Noch kein Schiff ausgewählt.</p>';
-      $("fit-resource-meters").innerHTML = "";
+      $("fit-slots").innerHTML = "";
+      $("fit-extra-slots").innerHTML = "";
       return;
     }
-    $("fit-ship-drop").innerHTML = `<img src="https://images.evetech.net/types/${ship.id}/icon?size=64" alt=""><div><strong>${escapeHtml(ship.name)}</strong><small>${escapeHtml(ship.group || "Schiff")} · Schiff hier ablegen zum Wechseln</small></div>`;
+    arrangeSlots();
+    $("fit-ship-drop").innerHTML = `<img src="https://images.evetech.net/types/${ship.id}/render?size=512" alt=""><div><strong>${escapeHtml(ship.name)}</strong><small>${escapeHtml(ship.group || "Schiff")} · Schiff hier ablegen zum Wechseln</small></div>`;
     setupDropTarget($("fit-ship-drop"),"ship");
     const totalsNow = totals();
     $("fit-meters").innerHTML =
       meter("CPU",totalsNow.cpu,attr(ship,"cpu"),"tf") +
       meter("Powergrid",totalsNow.powergrid,attr(ship,"powergrid"),"MW") +
       meter("Calibration",totalsNow.calibration,attr(ship,"calibration"),"");
-    const slotLimits = {high:attr(ship,"high_slots"),medium:attr(ship,"medium_slots"),low:attr(ship,"low_slots"),rig:attr(ship,"rig_slots"),subsystem:attr(ship,"subsystem_slots")};
-    $("fit-slots").innerHTML = Object.entries(slotNames).map(([slot,label]) => {
-      const modules = state.active.modules.filter(item => item.slot === slot);
-      const limit = slotLimits[slot];
-      return `<section class="fit-slot" data-slot="${slot}"><h3>${label} ${slot === "charge" ? modules.length : `${modules.length}/${limit}`}</h3>${modules.map((item,index) => `<div class="fit-module"><span>${escapeHtml(item.name)}</span><button type="button" data-remove="${slot}:${index}" aria-label="Modul entfernen">×</button></div>`).join("") || '<small class="hint">Hier ablegen oder leer</small>'}</section>`;
-    }).join("");
-    $("fit-slots").querySelectorAll("[data-remove]").forEach(button => button.addEventListener("click", () => {
-      const [slot,index] = button.dataset.remove.split(":");
-      const matching = state.active.modules.filter(item=>item.slot===slot);
-      const removed = matching[Number(index)];
-      const removeIndex = state.active.modules.indexOf(removed);
-      if(removeIndex>=0) state.active.modules.splice(removeIndex,1);
-      save(); renderFit();
-    }));
-    $("fit-slots").querySelectorAll("[data-slot]").forEach(slot => setupDropTarget(slot,slot.dataset.slot));
-    const hp = attr(ship,"shield_hp") + attr(ship,"armor_hp") + attr(ship,"hull_hp");
-    $("fit-base-stats").innerHTML = [
-      ["Capacitor",`${attr(ship,"capacitor").toFixed(0)} GJ`],
-      ["Max velocity",`${attr(ship,"max_velocity").toFixed(0)} m/s`],
-      ["Drone bay",`${attr(ship,"drone_capacity").toFixed(0)} m³`],
-      ["Base HP",`${hp.toFixed(0)} HP`],
-    ].map(([label,value]) => `<div class="fit-stat"><small>${label}</small><strong>${value}</strong></div>`).join("");
-    const overSlots = Object.entries(slotLimits).some(([slot,limit]) => (totalsNow.slots[slot] || 0) > limit);
+    const limits = slotLimits(ship);
+    const arcs = {high:[-145,-35],medium:[-20,70],low:[85,195]};
+    $("fit-slots").innerHTML = Object.entries(arcs).map(([slot,[start,end]]) =>
+      Array.from({length:limits[slot]},(_,index)=>{
+        const angle=(limits[slot]===1 ? (start+end)/2 : start+(end-start)*index/(limits[slot]-1))*Math.PI/180;
+        const item=state.active.modules.find(module=>module.slot===slot && module.slotIndex===index);
+        return moduleTile(item,slot,index).replace('class="fit-wheel-slot"',`class="fit-wheel-slot" style="left:${50+45*Math.cos(angle)}%;top:${50+45*Math.sin(angle)}%"`);
+      }).join("")
+    ).join("");
+    const extra = ["rig","subsystem"].filter(slot=>limits[slot]>0).map(slot=>{
+      const entries=Array.from({length:limits[slot]},(_,index)=>{
+        const item=state.active.modules.find(module=>module.slot===slot && module.slotIndex===index);
+        return `<div class="fit-extra-target" data-slot="${slot}" data-index="${index}">${item ? `${escapeHtml(item.name)} <button type="button" data-remove-id="${escapeHtml(item.instanceId)}" aria-label="${escapeHtml(item.name)} entfernen">×</button>` : `${slotNames[slot]} ${index+1} · frei`}</div>`;
+      }).join("");
+      return `<section class="fit-slot"><h3>${slotNames[slot]}</h3>${entries}</section>`;
+    });
+    const charges=state.active.modules.filter(item=>item.slot==="charge");
+    extra.push(`<section class="fit-slot"><h3>Ladungen</h3><div class="fit-extra-target" data-slot="charge">${charges.map(item=>`<div>${escapeHtml(item.name)} <button type="button" data-remove-id="${escapeHtml(item.instanceId)}" aria-label="${escapeHtml(item.name)} entfernen">×</button></div>`).join("") || "Hier ablegen"}</div></section>`);
+    const overflow=state.active.modules.filter(item=>item.slot!=="charge" && item.slotIndex===null);
+    if (overflow.length) extra.push(`<section class="fit-slot"><h3>Ohne freien Slot</h3>${overflow.map(item=>`<div>${escapeHtml(item.name)} <button type="button" data-remove-id="${escapeHtml(item.instanceId)}" aria-label="${escapeHtml(item.name)} entfernen">×</button></div>`).join("")}</section>`);
+    $("fit-extra-slots").innerHTML=extra.join("");
+    for (const parent of [$("fit-slots"),$("fit-extra-slots")]) {
+      parent.querySelectorAll("[data-remove-id]").forEach(button=>button.addEventListener("click",()=>{
+        const index=state.active.modules.findIndex(item=>item.instanceId===button.dataset.removeId);
+        if(index>=0)state.active.modules.splice(index,1);
+        save();renderFit();
+      }));
+      parent.querySelectorAll("[data-slot]").forEach(target=>setupDropTarget(target,target.dataset.slot,target.dataset.index));
+    }
+    const overSlots = Object.entries(limits).some(([slot,limit]) => (totalsNow.slots[slot] || 0) > limit);
     const overResource = totalsNow.cpu > attr(ship,"cpu") || totalsNow.powergrid > attr(ship,"powergrid") || totalsNow.calibration > attr(ship,"calibration");
     if (overSlots || overResource) showError("Fitting überschreitet mindestens einen Slot oder eine Ressource. Flottenaufnahme bleibt möglich, Fit ist jedoch ungültig.");
     else clearError();
@@ -318,7 +406,7 @@
     for (const group of groups) tree.append(buildGroupNode(group, open));
     if (!groups.length) tree.innerHTML = '<small class="hint" style="padding:.6rem;display:block">Keine Treffer.</small>';
   }
-  function setupDropTarget(target,slot) {
+  function setupDropTarget(target,slot,index) {
     if(target.dataset.dropReady==="true")return;
     target.dataset.dropReady="true";
     target.addEventListener("dragover",event=>{event.preventDefault();event.dataTransfer.dropEffect="copy";target.classList.add("fit-drop-active");});
@@ -333,7 +421,7 @@
       }
       if(slot==="ship") { showError("Auf den Schiffsrumpf können nur Schiffe gezogen werden.");return; }
       if(data.category==="charges"&&slot!=="charge") { showError("Ladungen bitte in den Ladungsbereich ziehen.");return; }
-      await addModule(data.item,data.category,slot);
+      await addModule(data.item,data.category,slot,index);
     });
   }
   function readDraggedItem(event) {
@@ -352,14 +440,33 @@
       save(); renderFit();
     } catch (error) { showError("Schiffsdaten konnten nicht geladen werden: " + error.message); }
   }
-  async function addModule(item,category="modules",targetSlot="") {
+  async function refreshShip() {
+    if (!state.active.ship) { showError("Bitte zuerst ein Schiff auswählen."); return; }
+    const ship=state.active.ship;
+    try {
+      const updated=await loadType(ship,"ship");
+      if (state.active.ship !== ship) return;
+      state.active.ship=updated;currentShip=updated;
+      save();renderFit();
+    } catch (error) { showError("Schiffsdaten konnten nicht aktualisiert werden: "+error.message); }
+  }
+  async function addModule(item,category="modules",targetSlot="",targetIndex=undefined) {
     if (!state.active.ship) { showError("Bitte zuerst ein Schiff auswählen."); return; }
     try {
       const module = await loadType(item,category==="charges"?"charge":"module");
       if(category==="charges")module.slot="charge";
-      else if(!module.slot)module.slot=targetSlot||"high";
+      else if(!module.slot)throw new Error(`Für ${module.name} ist keine Slotart in ESI hinterlegt.`);
       if(targetSlot&&category!=="charges"&&module.slot!==targetSlot) {
         throw new Error(`${module.name} gehört in den ${slotNames[module.slot]||module.slot}-Slot, nicht in ${slotNames[targetSlot]||targetSlot}.`);
+      }
+      if(category!=="charges") {
+        arrangeSlots();
+        const limit=slotLimits(state.active.ship)[module.slot] || 0;
+        const used=new Set(state.active.modules.filter(entry=>entry.slot===module.slot).map(entry=>entry.slotIndex));
+        const index=targetIndex === undefined ? Array.from({length:limit},(_,i)=>i).find(i=>!used.has(i)) : Number(targetIndex);
+        if(index === undefined || !Number.isInteger(index) || index<0 || index>=limit) throw new Error(`Kein freier ${slotNames[module.slot]}-Slot vorhanden.`);
+        if(used.has(index)) throw new Error("Dieser Slot ist bereits belegt. Entferne das Modul zuerst.");
+        module.slotIndex=index;
       }
       module.instanceId=makeId();
       state.active.modules.push(module);
@@ -395,7 +502,7 @@
       const chargeItem=chargeText?.trim()?await findCatalogItem(chargeText.trim(),"charges"):null;
       if(moduleItem) {
         const module=await loadType(moduleItem,"module");
-        module.slot=module.slot||"high";
+        if (!module.slot) { missing.push(`${moduleName} (Slotart unbekannt)`); continue; }
         module.instanceId=makeId();
         modules.push(module);
       } else if(!chargeItem) {
@@ -445,7 +552,7 @@
       clearError();
       const text=$("fit-import-text").value.trim();
       if(!text)throw new Error("Bitte EFT-Fitting oder Fleet-JSON einfügen.");
-      if(text.startsWith("{")||text.startsWith("["))importFleetJson(text);
+      if(text.startsWith("{")||/^\[\s*[{[\]]/.test(text))importFleetJson(text);
       else await importEft(text);
     } catch(error) {
       $("fit-import-status").textContent="";
@@ -521,6 +628,7 @@
     searchTimer=setTimeout(renderCatalogTree,250);
   });
   $("fit-clear").addEventListener("click",()=>{state.active=emptyFit();currentShip=null;save();renderFit();});
+  $("fit-refresh").addEventListener("click",refreshShip);
   $("fit-add-fleet").addEventListener("click",addFleetFit);
   $("fit-fleet-clear").addEventListener("click",()=>{state.fleet=[];save();renderFleet();});
   $("fit-export").addEventListener("click",()=>{

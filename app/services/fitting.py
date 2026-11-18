@@ -27,8 +27,26 @@ ATTRIBUTE_IDS = {
     "mass": 4,
     "cargo_capacity": 38,
     "signature_radius": 552,
+    "target_range": 76,
+    "max_targets": 192,
+    "scan_resolution": 564,
+    "turret_hardpoints": 102,
+    "launcher_hardpoints": 101,
+    "shield_em": 271,
+    "shield_thermal": 274,
+    "shield_kinetic": 273,
+    "shield_explosive": 272,
+    "armor_em": 267,
+    "armor_thermal": 270,
+    "armor_kinetic": 269,
+    "armor_explosive": 268,
+    "hull_em": 113,
+    "hull_thermal": 110,
+    "hull_kinetic": 109,
+    "hull_explosive": 111,
 }
 
+SLOT_EFFECT_IDS = {11: "low", 12: "high", 13: "medium", 2663: "rig", 3772: "subsystem"}
 SLOT_EFFECTS = {
     "hipower": "high",
     "medpower": "medium",
@@ -53,12 +71,15 @@ def fitting_details(type_id: int, data: dict, category: str) -> dict:
         if item.get("attribute_id") is not None
     }
     values = {
-        key: attributes.get(attribute_id, 0)
+        key: attributes.get(attribute_id)
         for key, attribute_id in ATTRIBUTE_IDS.items()
     }
     slot = None
     if category == "module":
         for effect in data.get("dogma_effects", []):
+            slot = SLOT_EFFECT_IDS.get(effect.get("effect_id"))
+            if slot:
+                break
             name = str(effect.get("name", "")).casefold().replace("_", "")
             slot = next((value for key, value in SLOT_EFFECTS.items() if key in name), None)
             if slot:

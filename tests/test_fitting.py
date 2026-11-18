@@ -45,12 +45,25 @@ class FittingServiceTests(unittest.TestCase):
                 {"attribute_id": 48, "value": 160},
                 {"attribute_id": 14, "value": 4},
                 {"attribute_id": 1367, "value": 0},
+                {"attribute_id": 76, "value": 60000},
+                {"attribute_id": 192, "value": 6},
+                {"attribute_id": 564, "value": 275},
+                {"attribute_id": 271, "value": 0.8},
+                {"attribute_id": 270, "value": 0.65},
+                {"attribute_id": 109, "value": 0.67},
             ]},
             "ship",
         )
         self.assertEqual(ship["attributes"]["powergrid"], 55)
         self.assertEqual(ship["attributes"]["cpu"], 160)
         self.assertEqual(ship["attributes"]["high_slots"], 4)
+        self.assertEqual(ship["attributes"]["target_range"], 60000)
+        self.assertEqual(ship["attributes"]["max_targets"], 6)
+        self.assertEqual(ship["attributes"]["scan_resolution"], 275)
+        self.assertEqual(ship["attributes"]["shield_em"], 0.8)
+        self.assertEqual(ship["attributes"]["armor_thermal"], 0.65)
+        self.assertEqual(ship["attributes"]["hull_kinetic"], 0.67)
+        self.assertIsNone(ship["attributes"]["turret_hardpoints"])
         module = fitting_details(
             123,
             {"name": "Damage Control II",
@@ -63,6 +76,12 @@ class FittingServiceTests(unittest.TestCase):
         )
         self.assertEqual(module["slot"], "low")
         self.assertEqual(module["requirements"], {"cpu": 30, "powergrid": 1, "calibration": 0})
+
+    def test_slot_effect_ids_from_esi(self):
+        for effect_id, slot in [(11, "low"), (12, "high"), (13, "medium"), (2663, "rig"), (3772, "subsystem")]:
+            with self.subTest(slot=slot):
+                result = fitting_details(1, {"dogma_effects": [{"effect_id": effect_id}]}, "module")
+                self.assertEqual(result["slot"], slot)
 
 
 class MarketTreeTests(unittest.TestCase):
@@ -183,6 +202,9 @@ class FittingApiTests(unittest.TestCase):
         self.assertIn("data-load", response.text)
         self.assertIn("draggable=true", response.text)
         self.assertIn('id="fit-hull-only"', response.text)
+        self.assertIn('id="fit-extra-slots"', response.text)
+        self.assertIn("fit-wheel-slot", response.text)
+        self.assertIn("Schiffseigenschaften", response.text)
         self.assertIn("/api/fitting/tree", response.text)
         self.assertIn("application/x-eve-fitting", response.text)
 
