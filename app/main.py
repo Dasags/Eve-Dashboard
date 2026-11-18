@@ -31,7 +31,7 @@ from app.services.market import resolve_type_ids
 from app.services.market import adjusted_prices as get_adjusted_prices
 from app.services.invention import DECRYPTORS, apply_invention, plan_invention
 from app.services.production import apply_market_and_stock, create_plan, skill_time_factor
-from app.services.colonies import SCOPE as PLANET_SCOPE, factory_rings, load_colonies
+from app.services.colonies import SCOPE as PLANET_SCOPE, factory_rings, load_colonies, storage_fill
 from app.services.planetary import add_location_prices, analyze as analyze_planetary, create_plan as create_planetary_plan, product_catalog
 from app.services.sde import as_int, field, invention_recipes, load_sde, manufacturing_recipes, planetary_recipes, type_catalog
 
@@ -1668,11 +1668,18 @@ async def colony_overview(character_id: int) -> dict:
                 return sid, data.get("schematic_name", f"Schema {sid}"), data.get("cycle_time")
 
             schematic_ids = {sid for c in colonies for sid in c["factories"]}
-            names, planet_names, schematic_pairs = await asyncio.gather(
+            type_ids = {p["type_id"] for c in colonies for p in c.get("storage_pins", []) if p["type_id"]}
+            type_ids |= {tid for c in colonies for p in c.get("storage_pins", []) for tid in p["contents"]}
+
+            async def type_info(tid: int) -> tuple[int, dict]:
+                return tid, await safe(esi.get(f"/universe/types/{tid}/"), {})
+            names, planet_names, schematic_pairs, type_pairs = await asyncio.gather(
                 safe(resolve_names(esi, ids), {}),
                 asyncio.gather(*(planet(c["planet_id"]) for c in colonies)),
                 asyncio.gather(*(schematic(sid) for sid in schematic_ids)),
+                asyncio.gather(*(type_info(tid) for tid in type_ids)),
             )
+            type_data = dict(type_pairs)
             names.update(dict(planet_names))
             schematic_names = {sid: name for sid, name, _ in schematic_pairs}
             cycle_times = {sid: cycle for sid, _, cycle in schematic_pairs if cycle}
@@ -1693,6 +1700,7 @@ async def colony_overview(character_id: int) -> dict:
         for extractor in colony["extractors"]:
             extractor["product"] = names.get(extractor["product_type_id"], "Unbekannt")
         colony["factory_rings"] = factory_rings(colony, cycle_times, schematic_names)
+        colony["storage"] = storage_fill(colony, type_data)
         colony["factory_list"] = [
             {"name": schematic_names.get(sid, f"Schema {sid}"), "count": count}
             for sid, count in colony["factories"].items()

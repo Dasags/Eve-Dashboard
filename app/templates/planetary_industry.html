@@ -67,6 +67,17 @@
           <strong>{% if e.seconds_left is none or e.seconds_left <= 0 %}abgelaufen{% else %}noch {{ e.seconds_left|duration }}{% endif %}</strong>
         </div>
         {% else %}<p class="hint">Keine Extraktoren.</p>{% endfor %}
+        {% if focus.storage %}
+        <div class="eyebrow" style="margin-top:.8rem">Lager &amp; Launchpad</div>
+        <div class="pi-factories">
+          {% for st in focus.storage %}
+          <div class="pi-factory {{ st.status }}">
+            {{ mini_ring(st.status, st.fraction) }}
+            <span><strong>{{ st.kind }} · {{ st.percent }} %</strong><br><small>{{ "%.0f"|format(st.used) }} / {{ "%.0f"|format(st.capacity) }} m³</small></span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
         {% if focus.factory_rings %}
         <div class="eyebrow" style="margin-top:.8rem">Fabriken ({{ focus.factory_rings|length }})</div>
         <div class="pi-factories">
@@ -89,7 +100,7 @@
       </a>
       {% endfor %}
     </div>
-    <p class="hint">Grün = läuft, gelb = läuft in unter 24 h ab, rot = abgelaufen. Daten aus ESI (kurz zwischengespeichert).</p>
+    <p class="hint">Grün = läuft, gelb = läuft in unter 24 h ab, rot = abgelaufen. Lager/Launchpad: gelb ab 70 %, rot ab 90 % voll. Daten aus ESI (kurz zwischengespeichert).</p>
   {% endif %}
 </section>
 {% else %}

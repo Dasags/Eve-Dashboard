@@ -16,7 +16,7 @@ if "DATA_DIR" not in os.environ:
 from fastapi.testclient import TestClient
 
 from app import main
-from app.services.colonies import SCOPE, factory_rings, summarize
+from app.services.colonies import SCOPE, factory_rings, storage_fill, summarize
 
 NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
 SUMMARY = {"planet_id": 5, "solar_system_id": 9, "planet_type": "temperate", "upgrade_level": 5, "num_pins": 3}
@@ -60,6 +60,30 @@ class ColonySummaryTests(unittest.TestCase):
         self.assertEqual(by_status["expired"]["fraction"], 0)
         self.assertEqual(by_status["idle"]["seconds_left"], None)
 
+    def test_storage_fill_levels(self):
+        colony = summarize(
+            SUMMARY,
+            {"pins": [
+                {"type_id": 1, "contents": [{"type_id": 100, "amount": 3000}]},
+                {"type_id": 2, "contents": [{"type_id": 100, "amount": 400}]},
+                {"type_id": 3, "contents": []},
+                {"type_id": 9, "extractor_details": {}, "expiry_time": "2026-01-02T00:00:00Z"},
+            ]},
+            NOW,
+        )
+        types = {
+            1: {"name": "Barren Launchpad", "capacity": 10000},
+            2: {"name": "Barren Storage Facility", "capacity": 12000},
+            3: {"name": "Barren Command Center", "capacity": 500},
+            100: {"name": "Proteins", "volume": 3},
+        }
+        fills = {f["kind"]: f for f in storage_fill(colony, types)}
+        self.assertEqual(fills["Launchpad"]["percent"], 90)
+        self.assertEqual(fills["Launchpad"]["status"], "expired")
+        self.assertEqual(fills["Lager"]["percent"], 10)
+        self.assertEqual(fills["Command Center"]["percent"], 0)
+        self.assertEqual(len(fills), 3)
+
     def test_colony_without_extractors_is_idle(self):
         self.assertEqual(summarize(SUMMARY, {"pins": []}, NOW)["status"], "idle")
 
@@ -85,7 +109,7 @@ class ColonyPageTests(unittest.TestCase):
     def test_colonies_render_with_timer_and_status(self):
         colonies = [
             {"planet_id": 5, "system_id": 9, "planet_type": "Temperate", "planet_type_key": "temperate",
-             "command_center_level": 5, "pin_count": 3, "factories": {70: 2}, "factory_pins": [{"schematic_id": 70, "last_cycle_start": datetime.now(timezone.utc)}, {"schematic_id": 70, "last_cycle_start": None}], "seconds_left": 3600 * 50,
+             "command_center_level": 5, "pin_count": 3, "factories": {70: 2}, "storage_pins": [{"type_id": 1, "contents": {100: 3000}}], "factory_pins": [{"schematic_id": 70, "last_cycle_start": datetime.now(timezone.utc)}, {"schematic_id": 70, "last_cycle_start": None}], "seconds_left": 3600 * 50,
              "status": "running", "expiry_time": None,
              "extractors": [{"product_type_id": 7, "seconds_left": 3600 * 50, "heads": 4, "expiry_time": None}]},
             {"planet_id": 6, "system_id": 9, "planet_type": "Lava", "planet_type_key": "lava",
@@ -99,6 +123,10 @@ class ColonyPageTests(unittest.TestCase):
                 return {"name": "Alentene VII"}
             if "/universe/planets/6/" in path:
                 return {"name": "Alentene II"}
+            if "/universe/types/1/" in path:
+                return {"name": "Barren Launchpad", "capacity": 10000}
+            if "/universe/types/100/" in path:
+                return {"name": "Proteins", "volume": 3}
             return {"schematic_name": "Synthetic Oil", "cycle_time": 3600}
 
         esi.get = AsyncMock(side_effect=fake_get)
@@ -118,6 +146,7 @@ class ColonyPageTests(unittest.TestCase):
         self.assertIn("Alentene VII", response.text)
         self.assertIn("CC-Stufe 5", response.text)
         self.assertIn("2d 2h 0m", response.text)
+        self.assertIn("Launchpad · 90 %", response.text)
         self.assertIn("Fabriken (2)", response.text)
         self.assertIn("Synthetic Oil", response.text)
         self.assertIn("kein Zyklus aktiv", response.text)
