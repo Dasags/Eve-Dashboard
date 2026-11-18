@@ -16,7 +16,7 @@ if "DATA_DIR" not in os.environ:
 from fastapi.testclient import TestClient
 
 from app import main
-from app.services.colonies import SCOPE, summarize
+from app.services.colonies import SCOPE, factory_rings, summarize
 
 NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
 SUMMARY = {"planet_id": 5, "solar_system_id": 9, "planet_type": "temperate", "upgrade_level": 5, "num_pins": 3}
@@ -43,6 +43,23 @@ class ColonySummaryTests(unittest.TestCase):
         self.assertEqual(running["factories"], {70: 1})
         self.assertEqual(running["extractors"][0]["heads"], 2)
 
+    def test_factory_ring_progress(self):
+        colony = summarize(
+            SUMMARY,
+            {"pins": [
+                {"factory_details": {"schematic_id": 70}, "last_cycle_start": "2026-01-01T00:00:00Z"},
+                {"factory_details": {"schematic_id": 70}, "last_cycle_start": "2025-12-31T00:00:00Z"},
+                {"factory_details": {"schematic_id": 70}},
+            ]},
+            NOW,
+        )
+        rings = factory_rings(colony, {70: 3600}, {70: "Synthetic Oil"}, datetime(2026, 1, 1, 0, 15, tzinfo=timezone.utc))
+        by_status = {r["status"]: r for r in rings}
+        self.assertEqual(by_status["running"]["seconds_left"], 2700)
+        self.assertAlmostEqual(by_status["running"]["fraction"], 0.75)
+        self.assertEqual(by_status["expired"]["fraction"], 0)
+        self.assertEqual(by_status["idle"]["seconds_left"], None)
+
     def test_colony_without_extractors_is_idle(self):
         self.assertEqual(summarize(SUMMARY, {"pins": []}, NOW)["status"], "idle")
 
@@ -68,7 +85,7 @@ class ColonyPageTests(unittest.TestCase):
     def test_colonies_render_with_timer_and_status(self):
         colonies = [
             {"planet_id": 5, "system_id": 9, "planet_type": "Temperate", "planet_type_key": "temperate",
-             "command_center_level": 5, "pin_count": 3, "factories": {70: 2}, "seconds_left": 3600 * 50,
+             "command_center_level": 5, "pin_count": 3, "factories": {70: 2}, "factory_pins": [{"schematic_id": 70, "last_cycle_start": datetime.now(timezone.utc)}, {"schematic_id": 70, "last_cycle_start": None}], "seconds_left": 3600 * 50,
              "status": "running", "expiry_time": None,
              "extractors": [{"product_type_id": 7, "seconds_left": 3600 * 50, "heads": 4, "expiry_time": None}]},
             {"planet_id": 6, "system_id": 9, "planet_type": "Lava", "planet_type_key": "lava",
@@ -82,7 +99,7 @@ class ColonyPageTests(unittest.TestCase):
                 return {"name": "Alentene VII"}
             if "/universe/planets/6/" in path:
                 return {"name": "Alentene II"}
-            return {"schematic_name": "Synthetic Oil"}
+            return {"schematic_name": "Synthetic Oil", "cycle_time": 3600}
 
         esi.get = AsyncMock(side_effect=fake_get)
         esi.__aenter__.return_value = esi
@@ -101,7 +118,9 @@ class ColonyPageTests(unittest.TestCase):
         self.assertIn("Alentene VII", response.text)
         self.assertIn("CC-Stufe 5", response.text)
         self.assertIn("2d 2h 0m", response.text)
-        self.assertIn("2× Synthetic Oil", response.text)
+        self.assertIn("Fabriken (2)", response.text)
+        self.assertIn("Synthetic Oil", response.text)
+        self.assertIn("kein Zyklus aktiv", response.text)
         self.assertIn("abgelaufen", response.text)
         self.assertIn("CC-Stufe 4", second.text)
         self.assertNotIn("PI-TERMINAL", calc.text)

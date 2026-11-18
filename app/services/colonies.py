@@ -40,6 +40,7 @@ def summarize(summary: dict, detail: dict, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     extractors = []
     factories: dict[int, int] = {}
+    factory_pins: list[dict] = []
     for pin in detail.get("pins", []):
         extractor = pin.get("extractor_details")
         if extractor:
@@ -56,6 +57,9 @@ def summarize(summary: dict, detail: dict, now: datetime | None = None) -> dict:
         if factory and factory.get("schematic_id") is not None:
             schematic = int(factory["schematic_id"])
             factories[schematic] = factories.get(schematic, 0) + 1
+            factory_pins.append(
+                {"schematic_id": schematic, "last_cycle_start": parse_time(pin.get("last_cycle_start"))}
+            )
     extractors.sort(key=lambda item: item["seconds_left"] if item["seconds_left"] is not None else -1)
     soonest = extractors[0]["seconds_left"] if extractors else None
     planet_type = str(summary.get("planet_type", "")).lower()
@@ -68,6 +72,7 @@ def summarize(summary: dict, detail: dict, now: datetime | None = None) -> dict:
         "pin_count": summary.get("num_pins", len(detail.get("pins", []))),
         "extractors": extractors,
         "factories": factories,
+        "factory_pins": factory_pins,
         "seconds_left": soonest,
         "status": status_for(soonest, bool(extractors)),
     }
@@ -88,3 +93,30 @@ async def load_colonies(esi, character_id: int, concurrency: int = 5) -> list[di
         colonies,
         key=lambda item: (order[item["status"]], item["seconds_left"] if item["seconds_left"] is not None else -1),
     )
+
+
+def factory_rings(colony: dict, cycle_times: dict[int, int], names: dict[int, str], now: datetime | None = None) -> list[dict]:
+    """Zyklusfortschritt je Fabrik; Ring zeigt den Anteil des aktuellen Zyklus."""
+    now = now or datetime.now(timezone.utc)
+    rings = []
+    for pin in colony.get("factory_pins", []):
+        cycle = cycle_times.get(pin["schematic_id"])
+        start = pin["last_cycle_start"]
+        name = names.get(pin["schematic_id"], f"Schema {pin['schematic_id']}")
+        if not cycle or not start:
+            rings.append({"name": name, "status": "idle", "seconds_left": None, "fraction": 0, "cycle": cycle})
+            continue
+        left = cycle - (now - start).total_seconds()
+        # Läuft ein Zyklus weiter, startet die Fabrik laut ESI neu; nach Ablauf wartet sie auf Material.
+        status = "expired" if left <= 0 else "running"
+        rings.append(
+            {
+                "name": name,
+                "status": status,
+                "seconds_left": left,
+                "fraction": 0 if left <= 0 else min(1, left / cycle),
+                "cycle": cycle,
+            }
+        )
+    rings.sort(key=lambda r: (r["seconds_left"] is None, r["seconds_left"] or 0))
+    return rings
