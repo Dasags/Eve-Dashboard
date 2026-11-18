@@ -38,6 +38,7 @@ from app.services.fitting import (
     catalog_item as fitting_catalog_item,
     fitting_details,
 )
+from app.services.fitting_sde import build_market_tree, fits_hull, hull_profile, load_fitting_sde
 from app.services.production import apply_market_and_stock, create_plan, skill_time_factor
 from app.services.colonies import SCOPE as PLANET_SCOPE, factory_rings, load_colonies, storage_fill
 from app.services.planetary import add_location_prices, analyze as analyze_planetary, create_plan as create_planetary_plan, product_catalog
@@ -983,6 +984,52 @@ async def fitting_groups_api(request: Request, category: str = Query(...)):
         if as_int(row, "categoryID", "category_id") in category_ids[category]
     ]
     return {"groups": sorted(groups, key=lambda group: group["name"].casefold())}
+
+
+@app.get("/api/fitting/tree")
+async def fitting_tree_api(
+    request: Request,
+    category: str = Query("ships"),
+    hull_id: int = Query(0, ge=0),
+):
+    require_account(request)
+    require_module(request, "fitting")
+    if category not in {"ships", "modules", "charges"}:
+        raise HTTPException(422, "Unbekannte Katalogkategorie.")
+    category_ids = {
+        "ships": {SHIP_CATEGORY_ID},
+        "modules": {MODULE_CATEGORY_ID, SUBSYSTEM_CATEGORY_ID},
+        "charges": {CHARGE_CATEGORY_ID},
+    }[category]
+    data = await load_sde()
+    try:
+        extra = await load_fitting_sde()
+    except (httpx.HTTPError, OSError, ValueError) as exc:
+        raise HTTPException(502, "Marktgruppen-/Dogma-Daten sind momentan nicht erreichbar.") from exc
+    group_rows = {as_int(row, "groupID", "group_id"): row for row in data["invGroups"]}
+    hull = None
+    if hull_id and category == "modules":
+        hull_row = next((row for row in data["invTypes"] if as_int(row, "typeID", "type_id") == hull_id), None)
+        hull_group = group_rows.get(as_int(hull_row or {}, "groupID", "group_id"), {})
+        if not hull_row or as_int(hull_group, "categoryID", "category_id") != SHIP_CATEGORY_ID:
+            raise HTTPException(422, "Unbekannter Rumpf.")
+        hull = hull_profile(hull_id, as_int(hull_row, "groupID", "group_id"), extra["attributes"].get(hull_id, {}))
+    items = []
+    for row in data["invTypes"]:
+        type_id = as_int(row, "typeID", "type_id")
+        if not type_id or field(row, "published").casefold() not in {"1", "true"}:
+            continue
+        group = group_rows.get(as_int(row, "groupID", "group_id"), {})
+        if as_int(group, "categoryID", "category_id") not in category_ids:
+            continue
+        if hull and not fits_hull(extra["attributes"].get(type_id, {}), extra["effects"].get(type_id, set()), hull):
+            continue
+        item = fitting_catalog_item(
+            type_id, row, {as_int(group, "groupID", "group_id"): field(group, "groupName", "group_name")}
+        )
+        item["market_group"] = as_int(row, "marketGroupID", "market_group_id") or None
+        items.append(item)
+    return {"groups": build_market_tree(items, extra["market_groups"]), "total": len(items), "filtered": bool(hull)}
 
 
 @app.get("/api/fitting/type/{type_id}")

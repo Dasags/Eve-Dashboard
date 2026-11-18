@@ -27,6 +27,12 @@
   .fit-catalog-item img { width:20px;height:20px;object-fit:contain;flex:none; }
   .fit-catalog-item span { flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
   .fit-catalog-item small { color:#738497;font: .68rem ui-monospace,monospace; }
+  .fit-hull-only { display:flex;align-items:flex-start;gap:.45rem;margin:.5rem 0 0;font-size:.78rem;color:#c6d1de;cursor:pointer; }
+  .fit-hull-only input { width:auto;min-height:0;margin-top:.15rem; }
+  .fit-hull-only small { color:#738497; }
+  .fit-hull-only.disabled { opacity:.5;cursor:not-allowed; }
+  .fit-count { margin-left:auto;color:#738497;font:.68rem ui-monospace,monospace; }
+  .fit-group .fit-group { border-bottom:0; }
   .fit-drop-hint { color:#738497;font-size:.75rem;margin:.45rem 0; }
   .fit-drop-active { outline:2px dashed #3ddc97;outline-offset:2px;background:rgb(61 220 151 / 10%) !important; }
   .fit-slot[data-slot] { transition:background .15s,outline .15s; }
@@ -75,6 +81,7 @@
       </div>
       <label for="fit-search">⌕ Suchen</label>
       <input id="fit-search" type="search" autocomplete="off" placeholder="Name filtern …">
+      <label class="fit-hull-only"><input id="fit-hull-only" type="checkbox"> Nur für den gewählten Rumpf passend <small>(Slots, Hardpoints, Rig-Größe, Rumpfbeschränkung, CPU/PG)</small></label>
       <p id="fit-catalog-status" class="fit-drop-hint" aria-live="polite">Kategorie wird geladen …</p>
       <div id="fit-catalog-tree" class="fit-catalog-tree" aria-label="Ausrüstung nach Gruppe"></div>
       <p class="fit-drop-hint">Eintrag anklicken oder mit der Maus ins Fitting ziehen.</p>
@@ -129,7 +136,7 @@
   let state = {active:emptyFit(),fleet:[]};
   let currentShip = null;
   let catalogCategory = "ships";
-  let catalogGroups = [];
+  let catalogTree = null;
   let searchTimer;
 
   function showError(message) {
@@ -160,7 +167,22 @@
     const klass = pct > 100 ? "over" : pct > 85 ? "warn" : "";
     return `<div class="fit-meter"><span>${label}</span><div class="fit-track"><span class="${klass}" style="width:${Math.min(100,pct)}%"></span></div><strong>${used.toFixed(1)} / ${total.toFixed(1)} ${unit}</strong></div>`;
   }
+  let lastHullId = 0;
+  function syncHullFilter() {
+    const ship = state.active.ship;
+    const box = $("fit-hull-only");
+    box.disabled = !ship;
+    box.parentElement.classList.toggle("disabled", !ship);
+    box.parentElement.title = ship ? "" : "Zuerst einen Rumpf wählen";
+    const wasChecked = box.checked;
+    if (!ship) box.checked = false;
+    if ((ship?.id || 0) !== lastHullId) {
+      lastHullId = ship?.id || 0;
+      if (wasChecked && catalogCategory === "modules") loadGroups();
+    }
+  }
   function renderFit() {
+    syncHullFilter();
     const ship = state.active.ship;
     $("fit-meters").innerHTML = "";
     $("fit-base-stats").innerHTML = "";
@@ -207,16 +229,24 @@
   function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
   }
+  const treeCache = new Map();
   async function loadGroups() {
+    const hullId = $("fit-hull-only").checked && catalogCategory === "modules" ? state.active.ship?.id || 0 : 0;
+    const key = `${catalogCategory}:${hullId}`;
     try {
-      $("fit-catalog-status").textContent="Gruppen werden geladen …";
-      const response = await fetch(`/api/fitting/groups?category=${catalogCategory}`);
-      if (!response.ok) throw new Error((await response.json()).detail || `HTTP ${response.status}`);
-      catalogGroups=(await response.json()).groups;
+      if (!treeCache.has(key)) {
+        $("fit-catalog-status").textContent = "Katalog wird geladen …";
+        const params = new URLSearchParams({category:catalogCategory});
+        if (hullId) params.set("hull_id", String(hullId));
+        const response = await fetch(`/api/fitting/tree?${params}`);
+        if (!response.ok) throw new Error((await response.json()).detail || `HTTP ${response.status}`);
+        treeCache.set(key, await response.json());
+      }
+      catalogTree = treeCache.get(key);
       renderCatalogTree();
     } catch (error) {
-      $("fit-catalog-status").textContent="";
-      showError("Ausrüstungsgruppen konnten nicht geladen werden: "+error.message);
+      $("fit-catalog-status").textContent = "";
+      showError("Ausrüstungskatalog konnte nicht geladen werden: " + error.message);
     }
   }
   function appendCatalogItems(list,items) {
@@ -236,73 +266,57 @@
     }
     if(!items.length)list.innerHTML='<small class="hint">Keine veröffentlichten Einträge.</small>';
   }
-  async function fetchGroupItems(group,query="") {
-    const params=new URLSearchParams({category:catalogCategory,group_id:String(group.id)});
-    if(query)params.set("q",query);
-    const response=await fetch(`/api/fitting/catalog?${params}`);
-    if(!response.ok)throw new Error((await response.json()).detail||`HTTP ${response.status}`);
-    return response.json();
+  function filterTree(groups, folded) {
+    if (!folded) return groups;
+    const result = [];
+    for (const group of groups) {
+      const nameMatch = group.name.toLocaleLowerCase().includes(folded);
+      const children = filterTree(group.children, folded);
+      const items = nameMatch ? group.items : group.items.filter(item => item.name.toLocaleLowerCase().includes(folded));
+      if (nameMatch && !children.length && !items.length) result.push({...group, children:group.children});
+      else if (children.length || items.length) result.push({...group, children, items});
+    }
+    return result;
   }
-  async function renderCatalogTree() {
-    const query=$("fit-search").value.trim();
-    const folded=query.toLocaleLowerCase();
-    const tree=$("fit-catalog-tree");
+  function countItems(group) { return group.items.length + group.children.reduce((sum, child) => sum + countItems(child), 0); }
+  function buildGroupNode(group, open) {
+    const details = document.createElement("details");
+    details.className = "fit-group";
+    details.open = open;
+    const summary = document.createElement("summary");
+    summary.innerHTML = `${escapeHtml(group.name)} <small class="fit-count">${countItems(group)}</small>`;
+    details.append(summary);
+    const body = document.createElement("div");
+    body.className = "fit-group-items";
+    details.append(body);
+    let built = false;
+    const build = () => {
+      if (built) return;
+      built = true;
+      for (const child of group.children) body.append(buildGroupNode(child, open));
+      if (group.items.length) {
+        const list = document.createElement("div");
+        appendCatalogItems(list, group.items);
+        body.append(list);
+      }
+    };
+    if (open) build();
+    details.addEventListener("toggle", () => { if (details.open) build(); });
+    return details;
+  }
+  function renderCatalogTree() {
+    const folded = $("fit-search").value.trim().toLocaleLowerCase();
+    const tree = $("fit-catalog-tree");
     tree.replaceChildren();
-    let matchesByGroup=null;
-    if(query) {
-      try {
-        $("fit-catalog-status").textContent="Suche im Katalog …";
-        const params=new URLSearchParams({category:catalogCategory,q:query});
-        const response=await fetch(`/api/fitting/catalog?${params}`);
-        if(!response.ok)throw new Error((await response.json()).detail||`HTTP ${response.status}`);
-        const result=await response.json();
-        matchesByGroup=new Map();
-        for(const item of result.items) {
-          if(!matchesByGroup.has(item.group))matchesByGroup.set(item.group,[]);
-          matchesByGroup.get(item.group).push(item);
-        }
-        $("fit-catalog-status").textContent=result.truncated
-          ? "Erste 1000 Treffer; Suche bitte genauer eingrenzen."
-          : `${result.items.length} Treffer`;
-      } catch(error) {
-        $("fit-catalog-status").textContent="Suche fehlgeschlagen: "+error.message;
-        return;
-      }
-    } else {
-      $("fit-catalog-status").textContent=`${catalogGroups.length} Gruppen · Gruppe öffnen`;
-    }
-    const visibleGroups=query
-      ? catalogGroups.filter(group=>matchesByGroup.has(group.name)||group.name.toLocaleLowerCase().includes(folded))
-      : catalogGroups;
-    for(const group of visibleGroups) {
-      const details=document.createElement("details");
-      details.className="fit-group";
-      details.dataset.groupId=group.id;
-      const summary=document.createElement("summary");
-      summary.textContent=group.name;
-      details.append(summary);
-      const list=document.createElement("div");
-      list.className="fit-group-items";
-      details.append(list);
-      let loaded=false;
-      if(query) {
-        const matches=matchesByGroup.get(group.name)||[];
-        if(matches.length) { details.open=true;appendCatalogItems(list,matches);loaded=true; }
-      }
-      details.addEventListener("toggle",async()=>{
-        if(!details.open||loaded)return;
-        loaded=true;list.innerHTML='<small class="hint">Lade Einträge …</small>';
-        try {
-          const result=await fetchGroupItems(group);
-          appendCatalogItems(list,result.items);
-          if(result.truncated)list.insertAdjacentHTML("beforeend",'<small class="hint">Erste 1000 Treffer. Suche eingrenzen.</small>');
-        } catch(error) {
-          loaded=false;list.textContent="Laden fehlgeschlagen: "+error.message;
-        }
-      });
-      tree.append(details);
-    }
-    if(query&&!visibleGroups.length)$("fit-catalog-status").textContent="Keine Treffer.";
+    if (!catalogTree) return;
+    const groups = filterTree(catalogTree.groups, folded);
+    const total = groups.reduce((sum, group) => sum + countItems(group), 0);
+    const hullNote = catalogTree.filtered ? ` · passend für ${state.active.ship?.name || "Rumpf"}` : "";
+    $("fit-catalog-status").textContent = folded ? `${total} Treffer${hullNote}` : `${total} Einträge${hullNote}`;
+    // Eine Suche klappt alles auf, solange das Ergebnis überschaubar ist.
+    const open = Boolean(folded) && total <= 300;
+    for (const group of groups) tree.append(buildGroupNode(group, open));
+    if (!groups.length) tree.innerHTML = '<small class="hint" style="padding:.6rem;display:block">Keine Treffer.</small>';
   }
   function setupDropTarget(target,slot) {
     if(target.dataset.dropReady==="true")return;
@@ -499,6 +513,9 @@
     $("fit-search").value="";
     loadGroups();
   }));
+  $("fit-hull-only").addEventListener("change",()=>{
+    if(catalogCategory==="modules")loadGroups();
+  });
   $("fit-search").addEventListener("input",()=>{
     clearTimeout(searchTimer);
     searchTimer=setTimeout(renderCatalogTree,250);
