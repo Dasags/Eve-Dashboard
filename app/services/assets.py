@@ -67,9 +67,55 @@ def blueprint_records(assets: list[dict], sde: dict[str, list[dict[str, str]]]) 
                 "runs": runs if copy else None,
                 "material_efficiency": asset.get("material_efficiency"),
                 "time_efficiency": asset.get("time_efficiency"),
+                "location_id": asset.get("location_id"),
+                "location_flag": asset.get("location_flag", ""),
+                "location_name": "",
+                "container_name": "",
             }
         )
     return records
+
+
+def blueprint_locations(
+    blueprints: list[dict],
+    assets: list[dict],
+    names: dict[int, str],
+    locations: dict[int, str],
+    container_names: dict[int, str] | None = None,
+) -> list[dict]:
+    """Resolve blueprint container ancestry without changing the saved blueprint records."""
+    assets_by_id = {int(asset["item_id"]): asset for asset in assets}
+    container_names = container_names or {}
+    result = []
+    for blueprint in blueprints:
+        record = dict(blueprint)
+        asset = assets_by_id.get(int(blueprint["item_id"]))
+        parent_id = asset.get("location_id") if asset else blueprint.get("location_id")
+        if asset:
+            record["location_flag"] = asset.get("location_flag") or record.get("location_flag", "")
+        containers = []
+        seen = {int(blueprint["item_id"])}
+        while parent_id is not None and int(parent_id) in assets_by_id:
+            parent_id = int(parent_id)
+            if parent_id in seen:
+                break
+            seen.add(parent_id)
+            parent = assets_by_id[parent_id]
+            containers.append(
+                container_names.get(parent_id)
+                or names.get(int(parent["type_id"]), f"Unbekannter Container (Typ {parent['type_id']})")
+            )
+            parent_id = parent.get("location_id")
+        location_id = int(parent_id) if parent_id is not None else None
+        record["location_id"] = location_id
+        record["container_name"] = " › ".join(reversed(containers))
+        record["location_name"] = (
+            locations.get(location_id, f"Unbekannter Ort (ID {location_id})")
+            if location_id is not None
+            else "Ort nicht verfügbar"
+        )
+        result.append(record)
+    return result
 
 
 def assemble_assets(
