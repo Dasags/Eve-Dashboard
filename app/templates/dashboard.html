@@ -1,21 +1,46 @@
 {% extends "base.html" %}
 {% block title %}{{ character.name }} – {{ app_name }}{% endblock %}
+{% block head %}
+{% include "_terminal_style.html" %}
+<style>
+  .dashboard-header { display:flex; align-items:center; gap:1rem; }
+  .dashboard-header img { flex:none; border-radius:.7rem; background:#111b29; }
+  .dashboard-summary { margin-top:.8rem; }
+  .dashboard-summary .eyebrow { color:#3ddc97; }
+  .dashboard-section { margin-top:1rem; }
+  .dashboard-section-head { display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:.8rem; }
+  .dashboard-section-head h2 { margin:0; }
+  .dashboard-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr)); gap:.8rem; }
+  .dashboard-card { min-width:0; border-color:rgb(61 220 151 / 26%); background:rgb(10 25 28 / 48%); box-shadow:0 0 12px rgb(61 220 151 / 8%) inset; }
+  .dashboard-card.active { border-color:#3ddc97; box-shadow:0 0 12px rgb(61 220 151 / 20%); }
+  .dashboard-card-head { display:flex; flex-wrap:wrap; align-items:center; gap:.8rem; }
+  .dashboard-card-head img { flex:none; border-radius:.5rem; }
+  .dashboard-card-head > div { flex:1; min-width:130px; overflow-wrap:anywhere; }
+  .dashboard-wallet { margin-top:.8rem; padding:.55rem .7rem; border-left:3px solid #3ddc97; background:rgb(61 220 151 / 8%); }
+  .dashboard-wallet strong { display:block; color:#c8ffe6; font-family:ui-monospace,Consolas,monospace; overflow-wrap:anywhere; }
+  .dashboard-wallet .hint { font-size:.8rem; }
+  .dashboard-queue { margin-top:.8rem; }
+  .dashboard-terminal-table th { color:#a5c7bd; }
+  .dashboard-terminal-table tbody tr:hover { background:rgb(61 220 151 / 5%); }
+</style>
+{% endblock %}
 {% block content %}
 <div class="eyebrow">Char-Dashboard</div><h1>{{ character.name }}</h1>
 {% if motd %}<div class="notice"><strong>MOTD</strong><br>{{ motd }}</div>{% endif %}
 <div class="grid two">
-  <section class="panel">
-    <div style="display:flex;align-items:center;gap:1rem">
+  <section class="panel pi-terminal">
+    <div class="eyebrow pi-mono">CHAR-TERMINAL // AUSGEWÄHLTER CHARAKTER</div>
+    <div class="dashboard-header dashboard-summary">
       <img src="https://images.evetech.net/characters/{{ character_id }}/portrait?size=128" width="72" height="72" alt="Porträt von {{ character.name }}" style="border-radius:.7rem;background:#111b29">
-      <div><div class="eyebrow">Hauptcharakter</div><h2 style="margin:.3rem 0">{{ character.name }}</h2><span class="pill">Sec {{ "%.2f"|format(character.security_status or 0) }}</span></div>
+      <div><div class="eyebrow">{{ "Hauptcharakter" if selected_profile.is_main else "Alt-Charakter" }}</div><h2 style="margin:.3rem 0">{{ character.name }}</h2><span class="pill">Sec {{ "%.2f"|format(character.security_status or 0) }}</span></div>
     </div>
     {% if active_character and not active_character.is_main %}<p class="hint">Ausgewählter Alt-Charakter</p>{% endif %}
     {% if selected_profile.total_skill_points is not none %}
       <p class="hint">Skillpunkte {{ "{:,}".format(selected_profile.total_skill_points).replace(",", ".") }}</p>
     {% endif %}
   </section>
-  <section class="panel">
-    <div class="eyebrow">Corporation</div>
+  <section class="panel pi-terminal">
+    <div class="eyebrow pi-mono">CHAR-TERMINAL // CORPORATION</div>
     {% if corporation %}
       <div style="display:flex;align-items:center;gap:1rem;margin-top:.5rem">
         <img src="https://images.evetech.net/corporations/{{ corporation.corporation_id }}/logo?size=64" width="48" height="48" alt="Logo von {{ corporation.name }}" style="border-radius:.5rem;background:#111b29">
@@ -28,15 +53,22 @@
     {% else %}<p class="muted">Corporation nicht verfügbar.</p>{% endif %}
   </section>
 </div>
-<section class="panel" style="margin-top:1rem">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem"><h2>Charaktere</h2><a href="/auth/chars">Verwalten</a></div>
-  <div class="grid">
+<section class="panel pi-terminal dashboard-section">
+  <div class="eyebrow pi-mono">CHAR-TERMINAL // CHARAKTERÜBERSICHT</div>
+  <div class="dashboard-section-head"><h2>Charaktere</h2><a href="/auth/chars">Verwalten</a></div>
+  <div class="dashboard-cards">
   {% for profile in profiles %}
-    <article class="card">
-      <div style="display:flex;align-items:center;gap:.8rem">
-        <img src="https://images.evetech.net/characters/{{ profile.id }}/portrait?size=64" width="42" height="42" alt="" style="border-radius:.5rem">
-        <div style="flex:1"><strong>{{ profile.name }}</strong><div class="hint">{{ "Main" if profile.is_main else "Alt" }} · Sec {{ "%.2f"|format(profile.character.security_status or 0) }}{% if profile.corporation %} · {{ profile.corporation.name }} [{{ profile.corporation.ticker }}]{% endif %}</div></div>
-        {% if profile.id != character_id %}<form method="post" action="/auth/chars/select"><input type="hidden" name="character_id" value="{{ profile.id }}"><button>Auswählen</button></form>{% endif %}
+    <article class="card dashboard-card {{ 'active' if profile.id == character_id else '' }}">
+      <div class="dashboard-card-head">
+        <img src="https://images.evetech.net/characters/{{ profile.id }}/portrait?size=64" width="48" height="48" alt="">
+        <div><strong>{{ profile.name }}</strong><div class="hint">{{ "Main" if profile.is_main else "Alt" }} · Sec {{ "%.2f"|format(profile.character.security_status or 0) }}{% if profile.corporation %} · {{ profile.corporation.name }} [{{ profile.corporation.ticker }}]{% endif %}</div></div>
+        {% if profile.id != character_id %}<form method="post" action="/auth/chars/select"><input type="hidden" name="character_id" value="{{ profile.id }}"><input type="hidden" name="next" value="/dashboard"><button>Auswählen</button></form>{% else %}<span class="pill good">Aktiv</span>{% endif %}
+      </div>
+      <div class="dashboard-wallet">
+        <span class="hint">Persönlicher Kontostand</span>
+        {% if profile.wallet_status == "available" %}<strong>{{ profile.wallet_balance|isk }} ISK</strong>
+        {% elif profile.wallet_status == "scope_missing" %}<div class="hint">Wallet-Berechtigung fehlt. <a href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></div>
+        {% else %}<div class="hint">Kontostand momentan nicht verfügbar. ESI-Verbindung und Wallet-Berechtigung prüfen.</div>{% endif %}
       </div>
       {% if profile.queue %}
         <div style="margin-top:.8rem">
@@ -52,8 +84,9 @@
   {% endfor %}
   </div>
 </section>
-<section class="panel" style="margin-top:1rem">
-  <div style="display:flex;justify-content:space-between;align-items:center"><h2>Skill-Warteschlange – {{ character.name }}</h2><a href="/skills">Skillübersicht öffnen</a></div>
+<section class="panel pi-terminal dashboard-section dashboard-terminal-table">
+  <div class="eyebrow pi-mono">CHAR-TERMINAL // SKILL-WARTESCHLANGE</div>
+  <div class="dashboard-section-head"><h2>Skill-Warteschlange – {{ character.name }}</h2><a href="/skills">Skillübersicht öffnen</a></div>
   {% if queue %}
   <div class="table-wrap"><table><thead><tr><th>#</th><th>Skill</th><th>Level</th><th>Abschluss (UTC)</th></tr></thead><tbody>
     {% for entry in queue %}<tr><td>{{ entry.queue_position + 1 }}</td><td>{{ entry.skill_name }}</td><td>{{ ["0","I","II","III","IV","V"][entry.finished_level] if entry.finished_level in range(0,6) else entry.finished_level }}</td><td>{{ entry.finish_date[:16]|replace("T"," ") if entry.finish_date else "—" }}</td></tr>{% endfor %}

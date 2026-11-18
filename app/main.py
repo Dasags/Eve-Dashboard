@@ -467,6 +467,8 @@ async def dashboard(request: Request):
         token_data = storage.get_character(char_id)
         queue_data = []
         total_skill_points = None
+        wallet_balance = None
+        wallet_status = "scope_missing"
         if (
             "esi-skills.read_skillqueue.v1" in token_data["scopes"]
             or "esi-skills.read_skills.v1" in token_data["scopes"]
@@ -477,6 +479,16 @@ async def dashboard(request: Request):
                 if "esi-skills.read_skills.v1" in token_data["scopes"]:
                     skills_data = await authenticated_esi.get(f"/characters/{char_id}/skills/")
                     total_skill_points = skills_data.get("total_sp", 0)
+        if "esi-wallet.read_character_wallet.v1" in token_data["scopes"]:
+            try:
+                async with ESIClient(char_id) as wallet_esi:
+                    balance = await wallet_esi.get(f"/characters/{char_id}/wallet/")
+                if isinstance(balance, bool) or not isinstance(balance, (int, float)) or not math.isfinite(balance):
+                    raise ValueError("Ungültiger Wallet-Kontostand von ESI.")
+                wallet_balance = balance
+                wallet_status = "available"
+            except (httpx.HTTPError, LookupError, PermissionError, RuntimeError, ValueError):
+                wallet_status = "unavailable"
         return {
             "id": char_id,
             "name": info["name"],
@@ -487,6 +499,8 @@ async def dashboard(request: Request):
             "ceo": ceo,
             "queue": queue_data,
             "total_skill_points": total_skill_points,
+            "wallet_balance": wallet_balance,
+            "wallet_status": wallet_status,
         }
 
     try:
