@@ -31,6 +31,7 @@ from app.services.market import resolve_type_ids
 from app.services.market import adjusted_prices as get_adjusted_prices
 from app.services.invention import DECRYPTORS, apply_invention, plan_invention
 from app.services.production import apply_market_and_stock, create_plan, skill_time_factor
+from app.services.colonies import SCOPE as PLANET_SCOPE, load_colonies
 from app.services.planetary import add_location_prices, analyze as analyze_planetary, create_plan as create_planetary_plan, product_catalog
 from app.services.sde import as_int, field, invention_recipes, load_sde, manufacturing_recipes, planetary_recipes, type_catalog
 
@@ -401,7 +402,7 @@ def select_character(
     if not storage.character_belongs_to(character_id, account_id):
         raise HTTPException(404, "Charakter gehört nicht zu diesem Konto.")
     request.session["character_id"] = character_id
-    target = next if next in {"/", "/wallet", "/wallet/distribution", "/skills", "/assets", "/bpo-bib"} else "/dashboard"
+    target = next if next in {"/", "/wallet", "/wallet/distribution", "/skills", "/assets", "/bpo-bib", "/planetary-industry"} else "/dashboard"
     return RedirectResponse(target, status_code=303)
 
 
@@ -1640,14 +1641,57 @@ async def pi_products() -> list[dict]:
         return []
 
 
+async def colony_overview(character_id: int) -> dict:
+    character = storage.get_character(character_id)
+    info = {"has_scope": PLANET_SCOPE in character["scopes"], "colonies": [], "error": None}
+    if not info["has_scope"]:
+        return info
+    try:
+        async with ESIClient(character_id) as esi:
+            colonies = await load_colonies(esi, character_id)
+            ids = {c["planet_id"] for c in colonies} | {c["system_id"] for c in colonies if c["system_id"]}
+            ids |= {e["product_type_id"] for c in colonies for e in c["extractors"] if e["product_type_id"]}
+            names = await resolve_names(esi, ids)
+            schematic_ids = {sid for c in colonies for sid in c["factories"]}
+
+            async def schematic(sid: int) -> tuple[int, str]:
+                try:
+                    return sid, (await esi.get(f"/universe/schematics/{sid}/"))["schematic_name"]
+                except (httpx.HTTPError, KeyError):
+                    return sid, f"Schema {sid}"
+
+            schematic_names = dict(await asyncio.gather(*(schematic(sid) for sid in schematic_ids)))
+    except (httpx.HTTPError, OSError, RuntimeError, ValueError, KeyError):
+        info["error"] = "Die Kolonien konnten nicht aus ESI geladen werden. Bitte später erneut versuchen."
+        return info
+    for colony in colonies:
+        colony["planet_name"] = names.get(colony["planet_id"], f"Planet {colony['planet_id']}")
+        colony["system_name"] = names.get(colony["system_id"], "")
+        for extractor in colony["extractors"]:
+            extractor["product"] = names.get(extractor["product_type_id"], "Unbekannt")
+        colony["factory_list"] = [
+            {"name": schematic_names.get(sid, f"Schema {sid}"), "count": count}
+            for sid, count in colony["factories"].items()
+        ]
+    info["colonies"] = colonies
+    return info
+
+
 @app.get("/planetary-industry")
-async def planetary_industry_page(request: Request):
-    require_account(request)
+async def planetary_industry_page(request: Request, tab: str = Query("colonies"), planet: int = Query(0)):
+    _, character_id = require_account(request)
     require_module(request, "planetary-industry")
     locations = storage.list_locations()
+    selected_tab = tab if tab in {"colonies", "calc"} else "colonies"
+    overview = await colony_overview(character_id) if selected_tab == "colonies" else {"has_scope": True, "colonies": [], "error": None}
+    colonies = overview["colonies"]
+    focus = next((c for c in colonies if c["planet_id"] == planet), colonies[0] if colonies else None)
     return render(
         request,
         "planetary_industry.html",
+        selected_tab=selected_tab,
+        overview=overview,
+        focus=focus,
         result=None,
         form_data={
             "location_ids": [
@@ -1746,6 +1790,9 @@ async def calculate_planetary_industry(
     return render(
         request,
         "planetary_industry.html",
+        selected_tab="calc",
+        overview={"has_scope": True, "colonies": [], "error": None},
+        focus=None,
         result={
             "plan": plan,
             "locations": location_results,

@@ -14,6 +14,7 @@ SCOPE_NAMES = [
     "esi-wallet.read_character_wallet.v1",
     "esi-assets.read_assets.v1",
     "esi-characters.read_blueprints.v1",
+    "esi-planets.manage_planets.v1",
     "esi-markets.structure_markets.v1",
     "esi-universe.read_structures.v1",
 ]
