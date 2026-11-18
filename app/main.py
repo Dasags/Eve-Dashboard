@@ -956,22 +956,17 @@ async def fitting_catalog_api(
         if group_id and as_int(row, "groupID", "group_id") != group_id:
             continue
         item = fitting_catalog_item(
-            type_id,
-            row,
-            {as_int(group, "groupID", "group_id"): field(group, "groupName", "group_name")},
+            type_id, row, {as_int(group, "groupID", "group_id"): field(group, "groupName", "group_name")}
         )
         if query and query not in item["name"].casefold():
             continue
         items.append(item)
     items.sort(key=lambda item: item["name"].casefold())
-    return {"items": items[:100], "truncated": len(items) > 100}
+    return {"items": items[:1000], "truncated": len(items) > 1000}
 
 
 @app.get("/api/fitting/groups")
-async def fitting_groups_api(
-    request: Request,
-    category: str = Query(...),
-):
+async def fitting_groups_api(request: Request, category: str = Query(...)):
     require_account(request)
     require_module(request, "fitting")
     category_ids = {
