@@ -8,6 +8,7 @@ Ein webbasiertes EVE-Online-Dashboard mit EVE-SSO-Anmeldung, Charakteren und Pro
 - **Sternenkarte:** Eigene interaktive 2D-Karte mit Regionen-, Sicherheits-, Killmail- und Incursion-Filtern; Systemdaten und Sprungverbindungen kommen aus dem EVE-SDE/Fuzzwork-Cache. DOTLAN wird als externe Referenz verlinkt, dessen Kartengrafiken werden nicht kopiert.
 - **Charaktere:** EVE-SSO, Main-/Alt-Verwaltung, Charakter-, Corporation- und Allianzprofil.
 - **Skills:** trainierte Skills, Skillpunkte und Skill-Warteschlange.
+- **Char-Dashboard:** Charakterkarten mit persönlichem ESI-Kontostand und Skill-Warteschlange im PI-Terminal-Stil. Jeder Charakter benötigt für seinen Kontostand den Wallet-Scope.
 - **Wallet:** Kontostand, Journal, Transaktionen und manuelle Verteilungsplanung im PI-Terminal-Stil; Charakterwechsel über Kacheln.
 - **Assets:** Gegenstände und Schiffe des ausgewählten Charakters mit Standortfilter, Namenssuche und Vergleich der niedrigsten Verkaufsorders in Jita und einem konfigurierten Heimatmarkt. Blueprint-Originale (BPO) werden von Kopien (BPC) unterschieden; für BPC wird kein Marktpreis angezeigt. Inhalte von Schiffen und Containern erscheinen am äußeren Standort; unbekannte Standorte zeigen ihre ESI-ID.
 - **BPO-Bib:** Eigene BPOs/BPCs nach SDE-Gruppen mit Materialeffizienz (ME), Zeiteffizienz (TE) und BPC-Runs. Einzelne Blueprints können für andere Dashboard-Spieler freigegeben werden; die freigegebene Liste zeigt den EVE-Charakter als Ingame-Ansprechpartner.
