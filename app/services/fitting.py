@@ -4,6 +4,7 @@ from app.services.sde import as_int, field
 
 SHIP_CATEGORY_ID = 6
 MODULE_CATEGORY_ID = 7
+CHARGE_CATEGORY_ID = 8
 SUBSYSTEM_CATEGORY_ID = 32
 
 ATTRIBUTE_IDS = {
