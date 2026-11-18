@@ -3,17 +3,7 @@
 {% block content %}
 <div class="eyebrow">Char-Dashboard</div>
 <h1>Assets – {{ active_character.name if active_character else "Charakter" }}</h1>
-{% if characters|length > 1 %}
-<form method="post" action="/auth/chars/select" class="toolbar">
-  <input type="hidden" name="next" value="/assets">
-  <label>Charakter
-    <select name="character_id" onchange="this.form.submit()">
-      {% for character in characters %}<option value="{{ character.id }}" {% if active_character and active_character.id == character.id %}selected{% endif %}>{{ character.name }}{% if character.is_main %} (Main){% endif %}</option>{% endfor %}
-    </select>
-  </label>
-  <noscript><button>Wechseln</button></noscript>
-</form>
-{% endif %}
+{% set next_url = "/assets" %}{% include "_char_tiles.html" %}
 {% if needs_scopes %}
 <section class="panel">
   <p>Für die Assets fehlt die ESI-Berechtigung <code>esi-assets.read_assets.v1</code> für diesen Charakter.</p>
