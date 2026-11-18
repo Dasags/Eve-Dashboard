@@ -31,7 +31,7 @@ from app.services.market import resolve_type_ids
 from app.services.market import adjusted_prices as get_adjusted_prices
 from app.services.invention import DECRYPTORS, apply_invention, plan_invention
 from app.services.production import apply_market_and_stock, create_plan, skill_time_factor
-from app.services.colonies import SCOPE as PLANET_SCOPE, load_colonies
+from app.services.colonies import SCOPE as PLANET_SCOPE, factory_rings, load_colonies
 from app.services.planetary import add_location_prices, analyze as analyze_planetary, create_plan as create_planetary_plan, product_catalog
 from app.services.sde import as_int, field, invention_recipes, load_sde, manufacturing_recipes, planetary_recipes, type_catalog
 
@@ -1663,9 +1663,9 @@ async def colony_overview(character_id: int) -> dict:
                 data = await safe(esi.get(f"/universe/planets/{pid}/"), {})
                 return pid, data.get("name", f"Planet {pid}")
 
-            async def schematic(sid: int) -> tuple[int, str]:
+            async def schematic(sid: int) -> tuple[int, str, int | None]:
                 data = await safe(esi.get(f"/universe/schematics/{sid}/"), {})
-                return sid, data.get("schematic_name", f"Schema {sid}")
+                return sid, data.get("schematic_name", f"Schema {sid}"), data.get("cycle_time")
 
             schematic_ids = {sid for c in colonies for sid in c["factories"]}
             names, planet_names, schematic_pairs = await asyncio.gather(
@@ -1674,7 +1674,8 @@ async def colony_overview(character_id: int) -> dict:
                 asyncio.gather(*(schematic(sid) for sid in schematic_ids)),
             )
             names.update(dict(planet_names))
-            schematic_names = dict(schematic_pairs)
+            schematic_names = {sid: name for sid, name, _ in schematic_pairs}
+            cycle_times = {sid: cycle for sid, _, cycle in schematic_pairs if cycle}
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         info["error"] = (
@@ -1691,6 +1692,7 @@ async def colony_overview(character_id: int) -> dict:
         colony["system_name"] = names.get(colony["system_id"], "")
         for extractor in colony["extractors"]:
             extractor["product"] = names.get(extractor["product_type_id"], "Unbekannt")
+        colony["factory_rings"] = factory_rings(colony, cycle_times, schematic_names)
         colony["factory_list"] = [
             {"name": schematic_names.get(sid, f"Schema {sid}"), "count": count}
             for sid, count in colony["factories"].items()

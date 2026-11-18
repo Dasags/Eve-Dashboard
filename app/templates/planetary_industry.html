@@ -10,6 +10,9 @@
   .pi-line { display:flex; justify-content:space-between; gap:1rem; padding:.4rem .7rem; margin:.3rem 0; border-left:3px solid #3ddc97; background:rgb(61 220 151 / 8%); }
   .pi-line.soon { border-color:#f2c94c; background:rgb(242 201 76 / 8%); }
   .pi-line.expired { border-color:#ef5350; background:rgb(239 83 80 / 8%); }
+  .pi-factories { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:.5rem; margin-top:.4rem; }
+  .pi-factory { display:flex; gap:.6rem; align-items:center; padding:.4rem .6rem; border-left:3px solid #3ddc97; background:rgb(61 220 151 / 8%); }
+  .pi-factory.expired { border-color:#ef5350; background:rgb(239 83 80 / 8%); } .pi-factory.idle { border-color:#4774a2; background:rgb(71 116 162 / 8%); }
   .pi-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:.7rem; }
   .pi-card { display:flex; gap:.7rem; align-items:center; padding:.6rem; border:1px solid #3ddc97; border-radius:8px; color:inherit; text-decoration:none; background:rgb(10 18 32 / 38%); }
   .pi-card.soon { border-color:#f2c94c; } .pi-card.expired { border-color:#ef5350; } .pi-card.idle { border-color:#4774a2; }
@@ -24,6 +27,12 @@
 </style>
 {% endblock %}
 {% block content %}
+{% macro mini_ring(status, frac) %}
+<svg class="pi-ring {{ status }}" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true">
+  <circle cx="50" cy="50" r="40" class="track"/>
+  <circle cx="50" cy="50" r="40" class="arc" pathLength="100" stroke-dasharray="{{ (frac * 100)|round(1) }} 100" transform="rotate(-90 50 50)"/>
+</svg>
+{% endmacro %}
 {% macro ring(colony, size) %}
 {% set left = colony.seconds_left %}
 {% set frac = 0 if left is none or left <= 0 else ([left / 345600, 1]|min) %}
@@ -54,11 +63,21 @@
         <p class="hint">{{ focus.system_name }} · {{ focus.pin_count }} Strukturen</p>
         {% for e in focus.extractors %}
         <div class="pi-line {{ 'expired' if e.seconds_left is none or e.seconds_left <= 0 else ('soon' if e.seconds_left < 86400 else 'running') }}">
-          <span>{{ e.product }} <small>({{ e.heads }} Köpfe)</small></span>
+          <span style="display:flex;align-items:center;gap:.6rem">{{ mini_ring('expired' if e.seconds_left is none or e.seconds_left <= 0 else ('soon' if e.seconds_left < 86400 else 'running'), 0 if e.seconds_left is none or e.seconds_left <= 0 else ([e.seconds_left / 345600, 1]|min)) }}<span>{{ e.product }} <small>({{ e.heads }} Köpfe)</small></span></span>
           <strong>{% if e.seconds_left is none or e.seconds_left <= 0 %}abgelaufen{% else %}noch {{ e.seconds_left|duration }}{% endif %}</strong>
         </div>
         {% else %}<p class="hint">Keine Extraktoren.</p>{% endfor %}
-        {% if focus.factory_list %}<div class="pi-line running"><span>Fabriken</span><strong>{% for f in focus.factory_list %}{{ f.count }}× {{ f.name }}{% if not loop.last %} · {% endif %}{% endfor %}</strong></div>{% endif %}
+        {% if focus.factory_rings %}
+        <div class="eyebrow" style="margin-top:.8rem">Fabriken ({{ focus.factory_rings|length }})</div>
+        <div class="pi-factories">
+          {% for f in focus.factory_rings %}
+          <div class="pi-factory {{ f.status }}">
+            {{ mini_ring(f.status, f.fraction) }}
+            <span><strong>{{ f.name }}</strong><br><small>{% if f.status == 'idle' %}kein Zyklus aktiv{% elif f.status == 'expired' %}Zyklus beendet{% else %}noch {{ f.seconds_left|duration }}{% endif %}</small></span>
+          </div>
+          {% endfor %}
+        </div>
+        {% elif focus.factory_list %}<div class="pi-line running"><span>Fabriken</span><strong>{% for f in focus.factory_list %}{{ f.count }}× {{ f.name }}{% if not loop.last %} · {% endif %}{% endfor %}</strong></div>{% endif %}
       </div>
     </div>
     <div class="pi-cards">
