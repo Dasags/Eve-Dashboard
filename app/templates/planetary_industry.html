@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Planetary Industry – {{ app_name }}{% endblock %}
 {% block head %}
+{% include "_terminal_style.html" %}
 <style>
   .bpo-tabs { display:flex; flex-wrap:wrap; gap:.6rem; margin-top:1rem; }
   .bpo-tabs [aria-selected="true"] { border-color:#4774a2; background:#17304a; }
-  .pi-mono { font-family:ui-monospace,Consolas,monospace; letter-spacing:.06em; }
   .pi-focus { display:flex; flex-wrap:wrap; gap:1.5rem; align-items:center; margin:1rem 0; }
   .pi-focus > div { flex:1; min-width:260px; }
   .pi-line { display:flex; justify-content:space-between; gap:1rem; padding:.4rem .7rem; margin:.3rem 0; border-left:3px solid #3ddc97; background:rgb(61 220 151 / 8%); }
@@ -24,12 +24,6 @@
   .pt-temperate { fill:#4f9d69 !important; } .pt-ice { fill:#bfe3f2 !important; } .pt-gas { fill:#d9a05b !important; }
   .pt-oceanic { fill:#2f6fb5 !important; } .pt-lava { fill:#d9542b !important; } .pt-barren { fill:#a38b6d !important; }
   .pt-storm { fill:#7f6fb5 !important; } .pt-plasma { fill:#e0457b !important; }
-  .pi-terminal { position:relative; border-color:rgb(61 220 151 / 35%); box-shadow:0 0 26px rgb(61 220 151 / 8%) inset; background:linear-gradient(180deg,rgb(8 22 24 / 55%),rgb(6 12 22 / 55%)); }
-  .pi-terminal::before,.pi-terminal::after { content:""; position:absolute; width:18px; height:18px; border:2px solid #3ddc97; pointer-events:none; }
-  .pi-terminal::before { top:-1px; left:-1px; border-right:0; border-bottom:0; border-top-left-radius:.85rem; }
-  .pi-terminal::after { bottom:-1px; right:-1px; border-left:0; border-top:0; border-bottom-right-radius:.85rem; }
-  .pi-terminal > .eyebrow { color:#3ddc97; text-shadow:0 0 8px rgb(61 220 151 / 60%); }
-  .pi-terminal h2 { color:#c8ffe6; text-shadow:0 0 10px rgb(61 220 151 / 35%); text-transform:uppercase; font-size:1.05rem; }
   .pi-focus > svg { flex:none; filter:drop-shadow(0 0 14px rgb(61 220 151 / 45%)); }
   .pi-ring .arc { filter:drop-shadow(0 0 3px currentColor); color:#3ddc97; }
   .pi-ring.soon .arc { color:#f2c94c; } .pi-ring.expired .arc { color:#ef5350; } .pi-ring.idle .arc { color:#4774a2; }
