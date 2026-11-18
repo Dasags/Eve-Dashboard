@@ -1,0 +1,19 @@
+{% include "_terminal_style.html" %}
+<style>
+  .wallet-summary { display:grid; grid-template-columns:minmax(230px,1fr) minmax(0,2fr); gap:1rem; margin-top:1rem; }
+  .wallet-balance { display:flex; align-items:center; gap:1rem; min-width:0; }
+  .wallet-emblem { display:grid; place-items:center; flex:none; width:88px; height:88px; border:5px solid rgb(61 220 151 / 20%); border-top-color:#3ddc97; border-right-color:#3ddc97; border-radius:50%; color:#3ddc97; font:700 1rem ui-monospace,Consolas,monospace; box-shadow:0 0 16px rgb(61 220 151 / 15%); }
+  .wallet-value { color:#c8ffe6; font:700 clamp(1.15rem,2vw,1.8rem) ui-monospace,Consolas,monospace; overflow-wrap:anywhere; }
+  .wallet-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.6rem; margin-top:.75rem; }
+  .wallet-metric { min-width:0; padding:.7rem; border-left:3px solid #3ddc97; background:rgb(61 220 151 / 8%); }
+  .wallet-metric.expense { border-color:#ef5350; background:rgb(239 83 80 / 8%); }
+  .wallet-metric strong { display:block; margin-top:.3rem; overflow-wrap:anywhere; font-family:ui-monospace,Consolas,monospace; }
+  .wallet-positive { color:#67d69c; } .wallet-negative { color:#ff8490; }
+  .wallet-terminal { margin-top:1rem; }
+  .wallet-terminal .toolbar { margin-top:.8rem; }
+  .wallet-terminal .toolbar .primary { border-color:#3ddc97; background:rgb(61 220 151 / 15%); color:#c8ffe6; }
+  .wallet-terminal th { color:#a5c7bd; }
+  .wallet-terminal tbody tr:hover { background:rgb(61 220 151 / 5%); }
+  @media(max-width:800px) { .wallet-summary { grid-template-columns:1fr; } }
+  @media(max-width:560px) { .wallet-metrics { grid-template-columns:1fr; } .wallet-emblem { width:68px; height:68px; } }
+</style>

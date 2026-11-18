@@ -1,25 +1,30 @@
 {% extends "base.html" %}
 {% block title %}Wallet – {{ app_name }}{% endblock %}
+{% block head %}{% include "_wallet_style.html" %}{% endblock %}
 {% block content %}
 <div class="eyebrow">Char-Dashboard · Wallet</div><h1>Wallet – {{ active_character.name if active_character else "Charakter" }}</h1>
 {% set next_url = "/wallet" %}{% include "_char_tiles.html" %}
 {% if needs_scopes %}
-<section class="panel"><h2>Wallet-Berechtigung fehlt</h2><p class="muted">Erlaube den ESI-Scope `esi-wallet.read_character_wallet.v1`, um den persönlichen Kontostand, Journal und Marktgeschäfte zu laden.</p><a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
+<section class="panel pi-terminal wallet-terminal"><div class="eyebrow pi-mono">WALLET-TERMINAL // BERECHTIGUNG</div><h2>Wallet-Berechtigung fehlt</h2><p class="muted">Erlaube den ESI-Scope <code>esi-wallet.read_character_wallet.v1</code>, um den persönlichen Kontostand, Journal und Marktgeschäfte zu laden.</p><a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
 {% elif wallet_error %}
-<section class="panel"><h2>Wallet konnte nicht geladen werden</h2><p class="muted">{{ wallet_error }}</p><a class="button primary" href="/auth/chars">Scopes prüfen</a><a class="button" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
+<section class="panel pi-terminal wallet-terminal"><div class="eyebrow pi-mono">WALLET-TERMINAL // STATUS</div><h2>Wallet konnte nicht geladen werden</h2><p class="muted">{{ wallet_error }}</p><a class="button primary" href="/auth/chars">Scopes prüfen</a><a class="button" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a></section>
 {% else %}
-{% if name_lookup_warning %}<section class="panel"><p class="hint">{{ name_lookup_warning }}</p></section>{% endif %}
-<div class="grid two">
-  <section class="panel"><div class="eyebrow">Kontostand</div><div style="font-size:1.75rem;font-weight:700;margin-top:.4rem">{{ wallet|isk }} ISK</div></section>
-  <section class="panel"><div class="eyebrow">Letzte 30 Tage</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-top:.5rem">
-      <div><span class="hint">Einkommen</span><div style="color:#67d69c">+{{ income_30|isk }} ISK</div></div>
-      <div><span class="hint">Ausgaben</span><div style="color:#ff8490">−{{ expenses_30|isk }} ISK</div></div>
-      <div><span class="hint">Netto</span><div>{{ net_30|isk }} ISK</div></div>
+{% if name_lookup_warning %}<section class="panel pi-terminal wallet-terminal"><p class="hint">{{ name_lookup_warning }}</p></section>{% endif %}
+<div class="wallet-summary">
+  <section class="panel pi-terminal">
+    <div class="eyebrow pi-mono">WALLET-TERMINAL // KONTOSTAND</div>
+    <div class="wallet-balance"><div class="wallet-emblem" aria-hidden="true">ISK</div><div><h2>Aktueller Kontostand</h2><div class="wallet-value">{{ wallet|isk }} ISK</div></div></div>
+  </section>
+  <section class="panel pi-terminal"><div class="eyebrow pi-mono">WALLET-TERMINAL // LETZTE 30 TAGE</div>
+    <div class="wallet-metrics">
+      <div class="wallet-metric"><span class="hint">Einkommen</span><strong class="wallet-positive">+{{ income_30|isk }} ISK</strong></div>
+      <div class="wallet-metric expense"><span class="hint">Ausgaben</span><strong class="wallet-negative">−{{ expenses_30|isk }} ISK</strong></div>
+      <div class="wallet-metric"><span class="hint">Netto</span><strong>{{ net_30|isk }} ISK</strong></div>
     </div>
   </section>
 </div>
-<section class="panel" style="margin-top:1rem">
+<section class="panel pi-terminal wallet-terminal">
+  <div class="eyebrow pi-mono">WALLET-TERMINAL // AKTIVITÄTEN</div>
   <div class="toolbar">
     <a class="button {% if view == 'journal' %}primary{% endif %}" href="/wallet?view=journal">Journal</a>
     <a class="button {% if view == 'transactions' %}primary{% endif %}" href="/wallet?view=transactions">Marktgeschäfte</a>
@@ -36,7 +41,7 @@
         <td>{{ item.date[:16]|replace("T"," ") }}</td><td>{{ item.ref_type|replace("_"," ")|title }}</td>
         <td>{{ item.first_party_name }} → {{ item.second_party_name }}</td>
         <td style="color:{{ '#67d69c' if item.amount >= 0 else '#ff8490' }}">{{ "+" if item.amount >= 0 else "−" }}{{ item.amount|abs|isk }} ISK</td>
-        <td>{{ item.balance|isk if item.balance is defined else "—" }} ISK</td>
+        <td>{% if item.balance is defined and item.balance is not none %}{{ item.balance|isk }} ISK{% else %}—{% endif %}</td>
       </tr>{% else %}<tr><td colspan="5" class="muted">Keine Journaleinträge verfügbar.</td></tr>{% endfor %}
     </tbody></table></div>
   {% endif %}

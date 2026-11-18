@@ -1,20 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Wallet-Verteilung – {{ app_name }}{% endblock %}
+{% block head %}{% include "_wallet_style.html" %}{% endblock %}
 {% block content %}
 <div class="eyebrow">Char-Dashboard · Wallet</div><h1>Wallet-Verteilung – {{ active_character.name if active_character else "Charakter" }}</h1>
 {% set next_url = "/wallet/distribution" %}{% include "_char_tiles.html" %}
+<div class="toolbar"><a class="button" href="/wallet">Wallet-Journal</a><a class="button" href="/wallet?view=transactions">Marktgeschäfte</a><span class="button primary" aria-current="page">Wallet-Verteilung</span></div>
 <div class="grid three">
-  <section class="panel"><div class="eyebrow">Aktueller Kontostand (berechnet)</div>
+  <section class="panel pi-terminal"><div class="eyebrow pi-mono">Aktueller Kontostand (berechnet)</div>
     <strong style="font-size:1.6rem;color:{{ '#ff8490' if current_balance < 0 else '#67d69c' }}">{{ current_balance|isk }} ISK</strong>
     <p class="hint">Start {{ plan.start_balance|isk }} + Eingänge {{ total_income|isk }} − Ausgaben {{ total_expenses|isk }}</p>
   </section>
-  <section class="panel"><div class="eyebrow">Start-Kontostand</div><strong style="font-size:1.4rem">{{ plan.start_balance|isk }} ISK</strong>
+  <section class="panel pi-terminal"><div class="eyebrow pi-mono">Start-Kontostand</div><strong style="font-size:1.4rem">{{ plan.start_balance|isk }} ISK</strong>
     <form method="post" action="/wallet/plan/start">
       <label style="margin-top:.6rem">Start-Kontostand setzen (ISK)<input name="amount" inputmode="decimal" placeholder="z. B. 1500000000" value="{{ plan.start_balance|round(2) if plan.start_balance else '' }}"></label>
       <div class="form-actions"><button class="primary">Speichern</button></div>
     </form>
   </section>
-  <section class="panel"><div class="eyebrow">Kontostand (ESI)</div>
+  <section class="panel pi-terminal"><div class="eyebrow pi-mono">Kontostand (ESI)</div>
     {% if wallet_balance is not none %}<strong style="font-size:1.4rem">{{ wallet_balance|isk }} ISK</strong>
     <form method="post" action="/wallet/plan/start"><div class="form-actions"><button>ESI-Wert als Start übernehmen</button></div></form>
     {% else %}<p class="hint">Nicht verfügbar. Berechtigung <code>esi-wallet.read_character_wallet.v1</code> fehlt oder ESI ist nicht erreichbar.</p>
@@ -22,12 +24,12 @@
   </section>
 </div>
 {% if overview|length > 1 %}
-<section class="panel" style="margin-top:1rem"><h2>Alle Charaktere</h2><div class="table-wrap"><table><thead><tr><th>Charakter</th><th>Start</th><th>Eingänge</th><th>Ausgaben</th><th>Kontostand</th></tr></thead><tbody>
+<section class="panel pi-terminal wallet-terminal"><h2>Alle Charaktere</h2><div class="table-wrap"><table><thead><tr><th>Charakter</th><th>Start</th><th>Eingänge</th><th>Ausgaben</th><th>Kontostand</th></tr></thead><tbody>
 {% for row in overview %}<tr><td>{{ row.name }}{% if active_character and active_character.id == row.id %} <span class="pill good">aktiv</span>{% endif %}</td><td>{{ row.start|isk }} ISK</td><td>{{ row.income|isk }} ISK</td><td>{{ row.expense|isk }} ISK</td><td style="color:{{ '#ff8490' if row.balance < 0 else '#67d69c' }}">{{ row.balance|isk }} ISK</td></tr>{% endfor %}
 <tr><th>Gesamt</th><th>{{ overview|sum(attribute='start')|isk }} ISK</th><th>{{ overview|sum(attribute='income')|isk }} ISK</th><th>{{ overview|sum(attribute='expense')|isk }} ISK</th><th>{{ overview|sum(attribute='balance')|isk }} ISK</th></tr>
 </tbody></table></div></section>
 {% endif %}
-<section class="panel" style="margin-top:1rem">
+<section class="panel pi-terminal wallet-terminal">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem"><h2>Verteilung</h2><span class="pill">Verteilt: {{ 100 - unallocated }} %</span></div>
   <div class="table-wrap"><table><thead><tr><th>Beschriftung</th><th>%</th><th>Anteil</th><th>Ausgegeben</th><th>Verbleibend</th><th></th></tr></thead><tbody>
     {% for allocation in allocations %}<tr>
@@ -40,14 +42,14 @@
   </tbody></table></div>
 </section>
 <div class="grid three" style="margin-top:1rem">
-  <section class="panel"><h2>Beschriftungen &amp; Prozente</h2><p class="hint">Anteil vom Start-Kontostand plus Eingängen. Summe bis maximal 100 %.</p>
+  <section class="panel pi-terminal"><h2>Beschriftungen &amp; Prozente</h2><p class="hint">Anteil vom Start-Kontostand plus Eingängen. Summe bis maximal 100 %.</p>
     <form method="post" action="/wallet/plan/labels">
       <label>Beschriftung<input name="name" maxlength="80" required placeholder="z. B. Ersatzschiffe"></label>
       <label style="margin-top:.7rem">Prozent<input type="number" name="percentage" min="0" max="100" step=".01" required></label>
       <div class="form-actions"><button class="primary">Beschriftung hinzufügen</button></div>
     </form>
   </section>
-  <section class="panel"><h2>Eingänge</h2><p class="hint">Werden zum Start-Kontostand addiert.</p>
+  <section class="panel pi-terminal"><h2>Eingänge</h2><p class="hint">Werden zum Start-Kontostand addiert.</p>
     <form method="post" action="/wallet/plan/entries">
       <input type="hidden" name="kind" value="income">
       <label>Beschreibung<input name="description" maxlength="120" required></label>
@@ -60,7 +62,7 @@
       <div class="form-actions"><button class="primary">Eingang hinzufügen</button></div>
     </form>
   </section>
-  <section class="panel"><h2>Ausgaben</h2><p class="hint">Werden von der gewählten Beschriftung abgezogen.</p>
+  <section class="panel pi-terminal"><h2>Ausgaben</h2><p class="hint">Werden von der gewählten Beschriftung abgezogen.</p>
     <form method="post" action="/wallet/plan/entries">
       <input type="hidden" name="kind" value="expense">
       <label>Beschreibung<input name="description" maxlength="120" required></label>
@@ -70,7 +72,7 @@
     </form>
   </section>
 </div>
-<section class="panel" style="margin-top:1rem"><h2>Manuelle Einträge</h2><div class="table-wrap"><table><thead><tr><th>Datum</th><th>Art</th><th>Beschreibung</th><th>Beschriftung</th><th>Betrag</th><th></th></tr></thead><tbody>
+<section class="panel pi-terminal wallet-terminal"><h2>Manuelle Einträge</h2><div class="table-wrap"><table><thead><tr><th>Datum</th><th>Art</th><th>Beschreibung</th><th>Beschriftung</th><th>Betrag</th><th></th></tr></thead><tbody>
 {% for entry in plan.entries %}<tr><td>{{ entry.entry_date }}</td><td>{{ "Eingang" if entry.kind == "income" else "Ausgabe" }}</td><td>{{ entry.description }}</td><td>{% for label in plan.labels %}{% if label.id == entry.label_id %}{{ label.name }}{% endif %}{% endfor %}</td><td>{{ entry.amount|isk }} ISK</td><td><form method="post" action="/wallet/plan/entries/{{ entry.id }}/delete"><button class="danger">Entfernen</button></form></td></tr>
 {% else %}<tr><td colspan="6" class="muted">Noch keine manuellen Einträge.</td></tr>{% endfor %}
 </tbody></table></div></section>
