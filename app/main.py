@@ -30,6 +30,13 @@ from app.services.market import sell_prices as get_sell_prices
 from app.services.market import resolve_type_ids
 from app.services.market import adjusted_prices as get_adjusted_prices
 from app.services.invention import DECRYPTORS, apply_invention, plan_invention
+from app.services.fitting import (
+    MODULE_CATEGORY_ID,
+    SHIP_CATEGORY_ID,
+    SUBSYSTEM_CATEGORY_ID,
+    catalog_item as fitting_catalog_item,
+    fitting_details,
+)
 from app.services.production import apply_market_and_stock, create_plan, skill_time_factor
 from app.services.colonies import SCOPE as PLANET_SCOPE, factory_rings, load_colonies, storage_fill
 from app.services.planetary import add_location_prices, analyze as analyze_planetary, create_plan as create_planetary_plan, product_catalog
@@ -46,6 +53,7 @@ MODULE_DETAILS = {
     "incursions": ("Incursion", "Aktuelle Sansha-Incursions aus öffentlichen ESI-Daten."),
     "marketwatcher": ("Marketwatcher", "Item-Listen und regionale Marktpreise."),
     "planetary-industry": ("Planetary Industry", "PI-Produktionsketten und Standortpreise."),
+    "fitting": ("Fitting-Tool", "Schiffs-Fittings und Flottenzusammenstellungen."),
 }
 OIDC_ISSUER = os.getenv("OIDC_ISSUER", "").rstrip("/")
 OIDC_CLIENT_ID = os.getenv("OIDC_CLIENT_ID", "")
@@ -171,6 +179,7 @@ def render(request: Request, page: str, **context):
         "assets",
         "skills",
         "planetary-industry",
+        "fitting",
         "industry",
         "marketwatcher",
         "incursions",
@@ -904,6 +913,90 @@ async def refresh_marketwatcher(watchlist: dict, locations: list[dict]) -> None:
             for location in selected_locations
         ]
     )
+
+
+@app.get("/fitting")
+async def fitting_page(request: Request):
+    require_account(request)
+    require_module(request, "fitting")
+    return render(request, "fitting.html")
+
+
+@app.get("/api/fitting/catalog")
+async def fitting_catalog_api(
+    request: Request,
+    q: str = Query("", max_length=80),
+    category: str = Query("ships"),
+):
+    require_account(request)
+    require_module(request, "fitting")
+    if category not in {"ships", "modules"}:
+        raise HTTPException(422, "Unbekannte Katalogkategorie.")
+    category_ids = (
+        {SHIP_CATEGORY_ID}
+        if category == "ships"
+        else {MODULE_CATEGORY_ID, SUBSYSTEM_CATEGORY_ID}
+    )
+    data = await load_sde()
+    group_rows = {
+        as_int(row, "groupID", "group_id"): row
+        for row in data["invGroups"]
+    }
+    query = q.strip().casefold()
+    items = []
+    for row in data["invTypes"]:
+        type_id = as_int(row, "typeID", "type_id")
+        if not type_id or field(row, "published").casefold() not in {"1", "true"}:
+            continue
+        group = group_rows.get(as_int(row, "groupID", "group_id"), {})
+        if as_int(group, "categoryID", "category_id") not in category_ids:
+            continue
+        item = fitting_catalog_item(
+            type_id,
+            row,
+            {as_int(group, "groupID", "group_id"): field(group, "groupName", "group_name")},
+        )
+        if query and query not in item["name"].casefold():
+            continue
+        items.append(item)
+    items.sort(key=lambda item: item["name"].casefold())
+    return {"items": items[:100], "truncated": len(items) > 100}
+
+
+@app.get("/api/fitting/type/{type_id}")
+async def fitting_type_api(request: Request, type_id: int, category: str = Query(...)):
+    require_account(request)
+    require_module(request, "fitting")
+    if category not in {"ship", "module"}:
+        raise HTTPException(422, "Unbekannte Fit-Kategorie.")
+    data = await load_sde()
+    groups = {
+        as_int(row, "groupID", "group_id"): as_int(row, "categoryID", "category_id")
+        for row in data["invGroups"]
+    }
+    row = next(
+        (item for item in data["invTypes"] if as_int(item, "typeID", "type_id") == type_id),
+        None,
+    )
+    expected = (
+        {SHIP_CATEGORY_ID}
+        if category == "ship"
+        else {MODULE_CATEGORY_ID, SUBSYSTEM_CATEGORY_ID}
+    )
+    if not row or field(row, "published").casefold() not in {"1", "true"}:
+        raise HTTPException(404, "Typ ist nicht im aktuellen SDE-Katalog.")
+    if groups.get(as_int(row, "groupID", "group_id")) not in expected:
+        raise HTTPException(422, "Der Typ gehört nicht zu dieser Kategorie.")
+    try:
+        async with ESIClient() as esi:
+            details = await esi.get(f"/universe/types/{type_id}/")
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            raise HTTPException(404, "ESI kennt diesen Typ nicht.") from exc
+        raise HTTPException(502, f"ESI lieferte HTTP {exc.response.status_code}.") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, "ESI-Typdaten sind momentan nicht erreichbar.") from exc
+    return fitting_details(type_id, details, category)
 
 
 @app.get("/marketwatcher")

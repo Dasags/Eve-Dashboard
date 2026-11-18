@@ -214,6 +214,7 @@ def initialize() -> None:
                 ("incursions", 0),
                 ("marketwatcher", 0),
                 ("planetary-industry", 0),
+                ("fitting", 0),
             ],
         )
         db.executemany(
