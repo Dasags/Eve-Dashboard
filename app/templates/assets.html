@@ -1,17 +1,31 @@
 {% extends "base.html" %}
 {% block title %}Assets – {{ app_name }}{% endblock %}
+{% block head %}
+{% include "_terminal_style.html" %}
+<style>
+  .asset-terminal { margin-top:1rem; }
+  .asset-terminal th { color:#a5c7bd; }
+  .asset-terminal tbody tr:hover { background:rgb(61 220 151 / 5%); }
+  .asset-toolbar { display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;gap:.8rem;margin:.5rem 0 1rem; }
+  .asset-toolbar label { min-width:0; }
+  .asset-summary { margin:.25rem 0;padding:.45rem .7rem;border-left:3px solid #3ddc97;background:rgb(61 220 151 / 7%); }
+  @media(max-width:560px) { .asset-toolbar { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
 {% block content %}
-<div class="eyebrow">Char-Dashboard</div>
+<div class="eyebrow">Char-Dashboard · Inventar</div>
 <h1>Assets – {{ active_character.name if active_character else "Charakter" }}</h1>
 {% set next_url = "/assets" %}{% include "_char_tiles.html" %}
 {% if needs_scopes %}
-<section class="panel">
+<section class="panel pi-terminal asset-terminal">
+  <div class="eyebrow pi-mono">ASSET-TERMINAL // BERECHTIGUNG</div>
   <p>Für die Assets fehlt die ESI-Berechtigung <code>esi-assets.read_assets.v1</code> für diesen Charakter.</p>
   <a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a>
 </section>
 {% else %}
-<section class="panel">
-  <form method="get" action="/assets" class="toolbar">
+<section class="panel pi-terminal asset-terminal">
+  <div class="eyebrow pi-mono">ASSET-TERMINAL // LAGERBESTÄNDE</div>
+  <form method="get" action="/assets" class="asset-toolbar">
     <label>Gegenstand suchen<input name="q" value="{{ q }}" maxlength="100" placeholder="Name eingeben"></label>
     <label>Station / Standort<select name="station">
       <option value="">Alle Standorte</option>
@@ -25,7 +39,7 @@
   </form>
   <p class="hint">Preisvergleich: niedrigste Verkaufsorder pro Stück und Gesamtwert der jeweiligen Position. Fehlende Orders sind kein Preis von 0 ISK. Heimatmärkte werden unter Admin → Standorte eingerichtet; Structures benötigen die entsprechenden ESI-Berechtigungen.</p>
   <p class="hint">Blueprint-Originale (BPO) verwenden Marktpreise. Blueprint-Kopien (BPC) haben keinen vergleichbaren Marktpreis und werden nicht bewertet.</p>
-  <p class="hint">{{ count }} Positionen · Seite {{ current_page }} von {{ pages }}. Inhalte in Schiffen und Containern sind dem äußeren Standort zugeordnet.</p>
+  <p class="asset-summary">{{ count }} Positionen · Seite {{ current_page }} von {{ pages }}. Inhalte in Schiffen und Containern sind dem äußeren Standort zugeordnet.</p>
   <div class="table-wrap">
     <table><thead><tr><th>Gegenstand / Schiff</th><th>Menge</th><th>Standort</th><th>Jita Verkauf</th><th>Heimatmarkt Verkauf</th><th>Differenz Gesamt</th></tr></thead>
       <tbody>
