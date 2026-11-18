@@ -31,6 +31,7 @@ from app.services.market import resolve_type_ids
 from app.services.market import adjusted_prices as get_adjusted_prices
 from app.services.invention import DECRYPTORS, apply_invention, plan_invention
 from app.services.fitting import (
+    CHARGE_CATEGORY_ID,
     MODULE_CATEGORY_ID,
     SHIP_CATEGORY_ID,
     SUBSYSTEM_CATEGORY_ID,
@@ -930,12 +931,12 @@ async def fitting_catalog_api(
 ):
     require_account(request)
     require_module(request, "fitting")
-    if category not in {"ships", "modules"}:
+    if category not in {"ships", "modules", "charges"}:
         raise HTTPException(422, "Unbekannte Katalogkategorie.")
     category_ids = (
         {SHIP_CATEGORY_ID}
         if category == "ships"
-        else {MODULE_CATEGORY_ID, SUBSYSTEM_CATEGORY_ID}
+        else ({MODULE_CATEGORY_ID, SUBSYSTEM_CATEGORY_ID} if category == "modules" else {CHARGE_CATEGORY_ID})
     )
     data = await load_sde()
     group_rows = {
@@ -952,22 +953,40 @@ async def fitting_catalog_api(
         if as_int(group, "categoryID", "category_id") not in category_ids:
             continue
         item = fitting_catalog_item(
-            type_id,
-            row,
-            {as_int(group, "groupID", "group_id"): field(group, "groupName", "group_name")},
+            type_id, row, {as_int(group, "groupID", "group_id"): field(group, "groupName", "group_name")}
         )
         if query and query not in item["name"].casefold():
             continue
         items.append(item)
     items.sort(key=lambda item: item["name"].casefold())
-    return {"items": items[:100], "truncated": len(items) > 100}
+    return {"items": items[:1000], "truncated": len(items) > 1000}
+
+
+@app.get("/api/fitting/groups")
+async def fitting_groups_api(request: Request, category: str = Query(...)):
+    require_account(request)
+    require_module(request, "fitting")
+    category_ids = {
+        "ships": {SHIP_CATEGORY_ID},
+        "modules": {MODULE_CATEGORY_ID, SUBSYSTEM_CATEGORY_ID},
+        "charges": {CHARGE_CATEGORY_ID},
+    }
+    if category not in category_ids:
+        raise HTTPException(422, "Unbekannte Katalogkategorie.")
+    data = await load_sde()
+    groups = [
+        {"id": as_int(row, "groupID", "group_id"), "name": field(row, "groupName", "group_name")}
+        for row in data["invGroups"]
+        if as_int(row, "categoryID", "category_id") in category_ids[category]
+    ]
+    return {"groups": sorted(groups, key=lambda group: group["name"].casefold())}
 
 
 @app.get("/api/fitting/type/{type_id}")
 async def fitting_type_api(request: Request, type_id: int, category: str = Query(...)):
     require_account(request)
     require_module(request, "fitting")
-    if category not in {"ship", "module"}:
+    if category not in {"ship", "module", "charge"}:
         raise HTTPException(422, "Unbekannte Fit-Kategorie.")
     data = await load_sde()
     groups = {
@@ -978,11 +997,11 @@ async def fitting_type_api(request: Request, type_id: int, category: str = Query
         (item for item in data["invTypes"] if as_int(item, "typeID", "type_id") == type_id),
         None,
     )
-    expected = (
-        {SHIP_CATEGORY_ID}
-        if category == "ship"
-        else {MODULE_CATEGORY_ID, SUBSYSTEM_CATEGORY_ID}
-    )
+    expected = {
+        "ship": {SHIP_CATEGORY_ID},
+        "module": {MODULE_CATEGORY_ID, SUBSYSTEM_CATEGORY_ID},
+        "charge": {CHARGE_CATEGORY_ID},
+    }[category]
     if not row or field(row, "published").casefold() not in {"1", "true"}:
         raise HTTPException(404, "Typ ist nicht im aktuellen SDE-Katalog.")
     if groups.get(as_int(row, "groupID", "group_id")) not in expected:

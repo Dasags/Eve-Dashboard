@@ -23,12 +23,14 @@ SDE = {
         {"typeID": "587", "typeName": "Rifter", "groupID": "25", "published": "1"},
         {"typeID": "5870", "typeName": "Fake Ship", "groupID": "25", "published": "0"},
         {"typeID": "123", "typeName": "Damage Control II", "groupID": "60", "published": "1"},
+        {"typeID": "778", "typeName": "Scourge Fury Light Missile", "groupID": "81", "published": "1"},
         {"typeID": "999", "typeName": "Invalid Category", "groupID": "99", "published": "1"},
     ],
     "invGroups": [
         {"groupID": "25", "groupName": "Frigate", "categoryID": "6"},
         {"groupID": "60", "groupName": "Armor", "categoryID": "7"},
         {"groupID": "99", "groupName": "Not a Ship", "categoryID": "4"},
+        {"groupID": "81", "groupName": "Light Missiles", "categoryID": "8"},
     ],
 }
 
@@ -77,10 +79,14 @@ class FittingApiTests(unittest.TestCase):
         with patch("app.main.load_sde", new=AsyncMock(return_value=SDE)):
             response = self.client.get("/api/fitting/catalog?category=ships&q=rift")
             modules = self.client.get("/api/fitting/catalog?category=modules&q=damage")
+            groups = self.client.get("/api/fitting/groups?category=modules")
+            charges = self.client.get("/api/fitting/catalog?category=charges&q=fury")
         self.assertEqual(response.status_code, 200)
         self.assertEqual([item["name"] for item in response.json()["items"]], ["Rifter"])
         self.assertEqual(response.json()["items"][0]["group"], "Frigate")
         self.assertEqual([item["name"] for item in modules.json()["items"]], ["Damage Control II"])
+        self.assertIn({"id": 60, "name": "Armor"}, groups.json()["groups"])
+        self.assertEqual(charges.json()["items"][0]["name"], "Scourge Fury Light Missile")
 
     def test_type_api_returns_validated_esi_dogma(self):
         esi = AsyncMock()
@@ -107,6 +113,13 @@ class FittingApiTests(unittest.TestCase):
         self.assertIn("Fleet-Analyse", response.text)
         self.assertIn("Fitting zur Flotte", response.text)
         self.assertIn("lokal in diesem Browser", response.text)
+        self.assertIn('id="fit-catalog-tree"', response.text)
+        self.assertIn('data-category="modules"', response.text)
+        self.assertIn('id="fit-ship-drop"', response.text)
+        self.assertIn("Fit-Datei importieren", response.text)
+        self.assertIn("data-load", response.text)
+        self.assertIn("draggable=true", response.text)
+        self.assertIn("application/x-eve-fitting", response.text)
 
     def test_fitting_module_is_registered_for_admin_activation(self):
         self.assertIn("fitting", {item["name"] for item in main.storage.list_modules()})
