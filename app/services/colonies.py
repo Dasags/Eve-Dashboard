@@ -41,6 +41,7 @@ def summarize(summary: dict, detail: dict, now: datetime | None = None) -> dict:
     extractors = []
     factories: dict[int, int] = {}
     factory_pins: list[dict] = []
+    storage_pins: list[dict] = []
     for pin in detail.get("pins", []):
         extractor = pin.get("extractor_details")
         if extractor:
@@ -51,6 +52,13 @@ def summarize(summary: dict, detail: dict, now: datetime | None = None) -> dict:
                     "seconds_left": (expiry - now).total_seconds() if expiry else None,
                     "expiry_time": expiry,
                     "heads": len(extractor.get("heads", [])),
+                }
+            )
+        if not extractor and not pin.get("factory_details") and pin.get("contents") is not None:
+            storage_pins.append(
+                {
+                    "type_id": pin.get("type_id"),
+                    "contents": {int(c["type_id"]): int(c["amount"]) for c in pin["contents"] if c.get("amount")},
                 }
             )
         factory = pin.get("factory_details")
@@ -73,6 +81,7 @@ def summarize(summary: dict, detail: dict, now: datetime | None = None) -> dict:
         "extractors": extractors,
         "factories": factories,
         "factory_pins": factory_pins,
+        "storage_pins": storage_pins,
         "seconds_left": soonest,
         "status": status_for(soonest, bool(extractors)),
     }
@@ -120,3 +129,31 @@ def factory_rings(colony: dict, cycle_times: dict[int, int], names: dict[int, st
         )
     rings.sort(key=lambda r: (r["seconds_left"] is None, r["seconds_left"] or 0))
     return rings
+
+
+def storage_kind(type_name: str) -> str | None:
+    name = type_name.lower()
+    if "launchpad" in name:
+        return "Launchpad"
+    if "storage" in name:
+        return "Lager"
+    if "command center" in name:
+        return "Command Center"
+    return None
+
+
+def storage_fill(colony: dict, types: dict[int, dict]) -> list[dict]:
+    """Füllstand je Lager/Launchpad aus Inhalt (m³) und Kapazität der Struktur."""
+    result = []
+    for pin in colony.get("storage_pins", []):
+        info = types.get(pin["type_id"]) or {}
+        kind = storage_kind(info.get("name", ""))
+        capacity = float(info.get("capacity") or 0)
+        if not kind or capacity <= 0:
+            continue
+        used = sum(float((types.get(tid) or {}).get("volume") or 0) * amount for tid, amount in pin["contents"].items())
+        fraction = min(1.0, used / capacity)
+        status = "expired" if fraction >= 0.9 else "soon" if fraction >= 0.7 else "running"
+        result.append({"kind": kind, "used": used, "capacity": capacity, "fraction": fraction, "percent": round(fraction * 100), "status": status})
+    order = {"Launchpad": 0, "Lager": 1, "Command Center": 2}
+    return sorted(result, key=lambda r: (order[r["kind"]], -r["fraction"]))
