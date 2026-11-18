@@ -8,10 +8,12 @@
   .fit-shell::after { bottom:-1px;right:-1px;border-left:0;border-top:0;border-bottom-right-radius:.85rem; }
   .fit-title,.fit-mono { font-family:ui-monospace,Consolas,monospace; letter-spacing:.06em; }
   .fit-title { color:#3ddc97;text-shadow:0 0 8px rgb(61 220 151 / 45%); }
-  .fit-grid { display:grid;grid-template-columns:minmax(280px, .8fr) minmax(400px,1.2fr);gap:1rem;margin-top:1rem; }
+  .fit-grid { display:grid;grid-template-columns:minmax(270px,.72fr) minmax(400px,1.28fr);gap:1rem;margin-top:1rem;align-items:start; }
   .fit-panel { border:1px solid rgb(61 220 151 / 20%);background:rgb(4 12 21 / 48%);padding:1rem;border-radius:.65rem; }
-  .fit-search-results { display:grid;gap:.3rem;max-height:260px;overflow:auto;margin-top:.4rem; }
-  .fit-result { justify-content:flex-start;text-align:left;width:100%;min-height:2.1rem;padding:.4rem .6rem;font-size:.85rem; }
+  .fit-picker { position:sticky;top:1rem; }
+  .fit-picker select { margin:.25rem 0 .65rem; }
+  .fit-picker-list { min-height:230px;font-size:.84rem; }
+  .fit-picker-list option { padding:.35rem; }
   .fit-ship { display:flex;align-items:center;gap:.9rem;margin:.9rem 0;padding:.75rem;border-left:3px solid #3ddc97;background:rgb(61 220 151 / 8%); }
   .fit-ship img { width:56px;height:56px;object-fit:contain;filter:drop-shadow(0 0 8px rgb(61 220 151 / 28%)); }
   .fit-meter { display:grid;grid-template-columns:100px 1fr 90px;align-items:center;gap:.5rem;margin:.45rem 0;font-size:.82rem; }
@@ -35,7 +37,7 @@
   .fit-fleet-row > div { flex:1;min-width:0; }
   .fit-chart { width:100%;height:220px;display:block; }
   .fit-error { color:#ffc8cc; }
-  @media(max-width:850px) { .fit-grid { grid-template-columns:1fr; } }
+  @media(max-width:850px) { .fit-grid { grid-template-columns:1fr; } .fit-picker { position:static; } }
   @media(max-width:560px) { .fit-slot-groups { grid-template-columns:1fr; } .fit-meter { grid-template-columns:75px 1fr 75px;font-size:.72rem; } }
 </style>
 {% endblock %}
@@ -44,29 +46,34 @@
 <h1>Fitting-Tool</h1>
 <section class="fit-shell">
   <div class="fit-title">FIT TERMINAL // FLEET COMPOSITION</div>
-  <p class="hint">Fittings erstellen, Ressourcen prüfen und mehrere Schiffstypen mit unterschiedlichen Flottenstärken zusammenstellen.</p>
+  <p class="hint">Links Schiff, Module oder Ladungen über Auswahlfelder finden; rechts bleibt das grüne Fitting-Terminal mit Ressourcen und Slots.</p>
   <div class="fit-grid">
-    <div class="fit-panel">
-      <label for="fit-ship-search">Schiff suchen</label>
-      <input id="fit-ship-search" type="search" autocomplete="off" placeholder="z. B. Drake, Vexor, Rifter">
-      <div id="fit-ship-results" class="fit-search-results" aria-live="polite"></div>
-      <div id="fit-ship-summary" class="fit-ship" hidden></div>
-      <div id="fit-meters"></div>
-      <div class="fit-results" id="fit-base-stats"></div>
-      <h2 class="fit-title" style="margin-top:1.1rem">Modul-Katalog</h2>
-      <label for="fit-module-search">Module suchen</label>
-      <input id="fit-module-search" type="search" autocomplete="off" placeholder="z. B. 10MN Afterburner">
-      <div id="fit-module-results" class="fit-search-results" aria-live="polite"></div>
-      <label style="margin-top:.6rem">Slot für Module ohne erkannten Slot
-        <select id="fit-slot-choice"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option><option value="rig">Rig</option><option value="subsystem">Subsystem</option></select>
+    <div class="fit-panel fit-picker">
+      <div class="fit-title">AUSRÜSTUNGSKATALOG</div>
+      <label for="fit-category">Bereich</label>
+      <select id="fit-category"><option value="ships">Rümpfe / Schiffe</option><option value="modules">Module</option><option value="charges">Ladungen</option></select>
+      <label for="fit-group">Gruppe</label>
+      <select id="fit-group"><option value="">Alle Gruppen</option></select>
+      <label for="fit-search">Suchen</label>
+      <input id="fit-search" type="search" autocomplete="off" placeholder="Name eingeben …">
+      <label for="fit-item">Treffer wählen</label>
+      <select id="fit-item" class="fit-picker-list" size="9" aria-label="Katalogtreffer"></select>
+      <div class="fit-actions">
+        <button id="fit-select-item" type="button" class="primary">Auswahl übernehmen</button>
+      </div>
+      <label style="margin-top:.7rem">Slot für Modul ohne erkannten Slot
+        <select id="fit-slot-choice"><option value="high">High</option><option value="medium">Mid</option><option value="low">Low</option><option value="rig">Rig</option><option value="subsystem">Subsystem</option></select>
       </label>
-      <p class="hint">Slots und CPU/Powergrid-Kosten werden beim Hinzufügen aus ESI geprüft.</p>
+      <div id="fit-picker-status" class="hint" aria-live="polite"></div>
     </div>
     <div class="fit-panel">
       <div style="display:flex;justify-content:space-between;gap:.6rem;align-items:center;flex-wrap:wrap">
         <h2 class="fit-title">Aktives Fitting</h2>
         <button id="fit-clear" type="button">Fitting leeren</button>
       </div>
+      <div id="fit-ship-summary" class="fit-ship" hidden></div>
+      <div id="fit-meters"></div>
+      <div class="fit-results" id="fit-base-stats"></div>
       <div class="fit-slot-groups" id="fit-slots"></div>
       <div id="fit-warning" class="notice" hidden></div>
       <h3 class="fit-mono" style="margin-top:1rem">FIT-RESSOURCEN</h3>
@@ -84,7 +91,15 @@
     <div><div class="fit-title">FLEET // COMPOSITION</div><p class="hint" id="fit-fleet-total">Noch keine Schiffe hinzugefügt.</p></div>
     <div class="fit-actions"><button id="fit-export" type="button">Fleet exportieren</button><button id="fit-import-toggle" type="button">Fleet importieren</button><button class="danger" id="fit-fleet-clear" type="button">Flotte leeren</button></div>
   </div>
-  <div id="fit-import-area" hidden><label>Fleet-JSON einfügen<textarea id="fit-import-json" rows="4" placeholder="Exportierte Fleet-JSON hier einfügen"></textarea></label><button id="fit-import" type="button" style="margin-top:.4rem">Importieren</button></div>
+  <div id="fit-import-area" hidden class="fit-panel" style="margin-top:.7rem">
+    <div class="fit-title">FITTING IMPORTIEREN</div>
+    <label for="fit-import-format">Format</label><select id="fit-import-format"><option value="eft">EFT / EVE-Fitting-Text</option><option value="json">Fleet-JSON-Backup</option></select>
+    <label for="fit-import-file" style="margin-top:.5rem">Datei laden (.txt / .json)<input id="fit-import-file" type="file" accept=".txt,.json,.fit,application/json,text/plain"></label>
+    <label for="fit-import-data" style="margin-top:.5rem">Fitting oder Fleet einfügen<textarea id="fit-import-data" rows="7" placeholder="[Drake, My Fleet Drake]&#10;Damage Control II&#10;10MN Afterburner II&#10;..."></textarea></label>
+    <p class="hint">Ein importiertes EFT-Fitting wird in den Editor geladen. Danach kannst du es prüfen, ändern und mit einer Menge in die Fleet Comp übernehmen.</p>
+    <button id="fit-import" type="button" class="primary">Importieren und im Editor öffnen</button>
+    <div id="fit-import-status" class="hint" aria-live="polite"></div>
+  </div>
   <div class="fit-grid">
     <div><div id="fit-fleet-list" class="fit-fleet"></div></div>
     <div class="fit-panel"><h2 class="fit-title">Fleet-Analyse</h2><canvas id="fit-chart" class="fit-chart" aria-label="Grafik: Schiffsanzahl pro Flottentyp"></canvas><div id="fit-fleet-stats" class="fit-results"></div></div>
@@ -97,11 +112,12 @@
 (() => {
   const $ = id => document.getElementById(id);
   const storageKey = "eve-dashboard.fitting.v1";
-  const slotNames = {high:"High",medium:"Mid",low:"Low",rig:"Rig",subsystem:"Subsystem"};
+  const slotNames = {high:"High",medium:"Mid",low:"Low",rig:"Rig",subsystem:"Subsystem",charge:"Ladungen"};
   const emptyFit = () => ({ship:null,modules:[]});
   let state = {active:emptyFit(),fleet:[]};
   let currentShip = null;
-  let shipSearchTimer, moduleSearchTimer;
+  let catalogTimer;
+  let catalogItems = [];
 
   function showError(message) {
     const warning = $("fit-warning");
@@ -117,6 +133,18 @@
   function number(value) { return Number.isFinite(Number(value)) ? Number(value) : 0; }
   function makeId() { return globalThis.crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
   function attr(item, name) { return number(item?.attributes?.[name]); }
+  function validateImportedFit(row) {
+    return Boolean(
+      row && row.ship && Number.isInteger(Number(row.ship.id)) && Number(row.ship.id) > 0 &&
+      typeof row.ship.name === "string" && row.ship.name.length <= 120 &&
+      row.ship.attributes && typeof row.ship.attributes === "object" &&
+      Array.isArray(row.modules) && row.modules.length <= 200 &&
+      row.modules.every(module => module && Number.isInteger(Number(module.id)) && Number(module.id) > 0 &&
+        typeof module.name === "string" && module.name.length <= 120 &&
+        ["high","medium","low","rig","subsystem","charge"].includes(module.slot) &&
+        module.requirements && typeof module.requirements === "object")
+    );
+  }
   function totals() {
     return state.active.modules.reduce((result, module) => {
       result.cpu += number(module.requirements?.cpu);
@@ -153,7 +181,7 @@
     $("fit-slots").innerHTML = Object.entries(slotNames).map(([slot,label]) => {
       const modules = state.active.modules.filter(item => item.slot === slot);
       const limit = slotLimits[slot];
-      return `<section class="fit-slot"><h3>${label} ${modules.length}/${limit}</h3>${modules.map(item => `<div class="fit-module"><span>${escapeHtml(item.name)}</span><button type="button" data-remove="${item.id}" aria-label="Modul entfernen">×</button></div>`).join("") || '<small class="hint">Leer</small>'}</section>`;
+      return `<section class="fit-slot"><h3>${label} ${slot === "charge" ? modules.length : `${modules.length}/${limit}`}</h3>${modules.map(item => `<div class="fit-module"><span>${escapeHtml(item.name)}</span><button type="button" data-remove="${item.id}" aria-label="Modul entfernen">×</button></div>`).join("") || '<small class="hint">Leer</small>'}</section>`;
     }).join("");
     $("fit-slots").querySelectorAll("[data-remove]").forEach(button => button.addEventListener("click", () => {
       state.active.modules = state.active.modules.filter(item => String(item.id) !== button.dataset.remove);
@@ -174,26 +202,49 @@
   function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
   }
-  async function searchCatalog(kind, query, target) {
-    if (!query.trim()) { target.innerHTML = ""; return; }
-    target.innerHTML = '<small class="hint">Suche …</small>';
+  async function loadGroups() {
+    const category = $("fit-category").value;
     try {
-      const response = await fetch(`/api/fitting/catalog?category=${kind}&q=${encodeURIComponent(query)}`);
+      const response = await fetch(`/api/fitting/groups?category=${category}`);
       if (!response.ok) throw new Error((await response.json()).detail || `HTTP ${response.status}`);
       const result = await response.json();
-      target.replaceChildren();
-      for (const item of result.items) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "fit-result";
-        button.textContent = `${item.name} · ${item.group}`;
-        button.addEventListener("click", () => kind === "ships" ? selectShip(item) : addModule(item));
-        target.append(button);
-      }
-      if (!result.items.length) target.innerHTML = '<small class="hint">Keine Treffer im SDE-Katalog.</small>';
-      else if (result.truncated) target.insertAdjacentHTML("beforeend",'<small class="hint">100 Treffer angezeigt – Suche genauer eingrenzen.</small>');
+      const select = $("fit-group");
+      select.replaceChildren(new Option("Alle Gruppen",""));
+      for (const group of result.groups) select.add(new Option(group.name,String(group.id)));
+      await searchCatalog();
     } catch (error) {
-      target.innerHTML = "";
+      showError("Kategorien konnten nicht geladen werden: " + error.message);
+    }
+  }
+  async function searchCatalog() {
+    const category = $("fit-category").value;
+    const group = $("fit-group").value;
+    const query = $("fit-search").value.trim();
+    if (!query && !group) {
+      catalogItems = [];
+      $("fit-item").replaceChildren();
+      $("fit-picker-status").textContent = "Wähle eine Gruppe oder suche nach einem Namen.";
+      return;
+    }
+    $("fit-picker-status").textContent = "Katalog wird geladen …";
+    try {
+      const params = new URLSearchParams({category,q:query});
+      if (group) params.set("group_id",group);
+      const response = await fetch(`/api/fitting/catalog?${params}`);
+      if (!response.ok) throw new Error((await response.json()).detail || `HTTP ${response.status}`);
+      const result = await response.json();
+      catalogItems = result.items;
+      const select = $("fit-item");
+      select.replaceChildren();
+      for (const item of catalogItems) {
+        const option = new Option(`${item.name} · ${item.group}`,String(item.id));
+        select.add(option);
+      }
+      $("fit-picker-status").textContent = result.items.length
+        ? `${result.items.length} Treffer${result.truncated ? " (erste 100 – Suche eingrenzen)" : ""}`
+        : "Keine Treffer. Suche oder Gruppe ändern.";
+    } catch (error) {
+      $("fit-picker-status").textContent = "";
       showError("Katalogsuche fehlgeschlagen: " + error.message);
     }
   }
@@ -206,21 +257,28 @@
     try {
       currentShip = await loadType(item,"ship");
       state.active = {ship:currentShip,modules:[]};
-      $("fit-ship-search").value = currentShip.name;
-      $("fit-ship-results").innerHTML = "";
-      save(); renderFit();
+      $("fit-category").value = "ships";
+      $("fit-search").value = currentShip.name;
+      $("fit-picker-status").textContent = `Schiff „${currentShip.name}“ ausgewählt.`;
+      save(); renderFit(); await loadGroups();
     } catch (error) { showError("Schiffsdaten konnten nicht geladen werden: " + error.message); }
   }
-  async function addModule(item) {
+  async function addModule(item, category="module") {
     if (!state.active.ship) { showError("Bitte zuerst ein Schiff auswählen."); return; }
     try {
-      const module = await loadType(item,"module");
-      if (!module.slot) module.slot = $("fit-slot-choice").value;
+      const module = await loadType(item,category);
+      if (category === "charge") module.slot = "charge";
+      else if (!module.slot) module.slot = $("fit-slot-choice").value;
       state.active.modules.push(module);
-      $("fit-module-search").value = "";
-      $("fit-module-results").innerHTML = "";
       save(); renderFit();
     } catch (error) { showError("Moduldaten konnten nicht geladen werden: " + error.message); }
+  }
+  async function selectCatalogItem() {
+    const item = catalogItems.find(entry => String(entry.id) === $("fit-item").value);
+    if (!item) { showError("Bitte zuerst einen Katalogeintrag auswählen."); return; }
+    const category = $("fit-category").value;
+    if (category === "ships") return selectShip(item);
+    await addModule(item,category === "charges" ? "charge" : "module");
   }
   function addFleetFit() {
     if (!state.active.ship) { showError("Bitte zuerst ein Schiff auswählen."); return; }
@@ -236,9 +294,10 @@
     state.fleet.forEach(row => {
       const card = document.createElement("div");
       card.className = "fit-fleet-row";
-      card.innerHTML = `<img src="https://images.evetech.net/types/${row.ship.id}/icon?size=64" alt=""><div><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.ship.name)} · ${row.modules.length} Module · Menge</small></div><input aria-label="Flottenmenge" type="number" min="1" max="10000" value="${row.quantity}" style="width:95px"><button type="button" class="danger">Entfernen</button>`;
+      card.innerHTML = `<img src="https://images.evetech.net/types/${row.ship.id}/icon?size=64" alt=""><div><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.ship.name)} · ${row.modules.length} Module · Menge</small></div><input aria-label="Flottenmenge" type="number" min="1" max="10000" value="${row.quantity}" style="width:95px"><button type="button" data-load>Fit laden</button><button type="button" class="danger" data-delete>Entfernen</button>`;
       card.querySelector("input").addEventListener("change",event=>{row.quantity=Math.min(10000,Math.max(1,parseInt(event.target.value,10)||1));save();renderFleet();});
-      card.querySelector("button").addEventListener("click",()=>{state.fleet=state.fleet.filter(item=>item.id!==row.id);save();renderFleet();});
+      card.querySelector("[data-load]").addEventListener("click",()=>loadFleetFit(row));
+      card.querySelector("[data-delete]").addEventListener("click",()=>{state.fleet=state.fleet.filter(item=>item.id!==row.id);save();renderFleet();});
       $("fit-fleet-list").append(card);
     });
     const counts = {};
@@ -248,6 +307,65 @@
     const mass = state.fleet.reduce((sum,row)=>sum+attr(row.ship,"mass")*row.quantity,0);
     const cargo = state.fleet.reduce((sum,row)=>sum+attr(row.ship,"cargo_capacity")*row.quantity,0);
     $("fit-fleet-stats").innerHTML = [["Base HP gesamt",`${Math.round(hp).toLocaleString("de-DE")} HP`],["Masse gesamt",`${(mass/1e6).toFixed(2)} Mio. t`],["Laderaum gesamt",`${Math.round(cargo).toLocaleString("de-DE")} m³`]].map(([label,value])=>`<div class="fit-stat"><small>${label}</small><strong>${value}</strong></div>`).join("");
+  }
+  function loadFleetFit(row) {
+    state.active = {ship:row.ship,modules:row.modules.map(module=>({...module}))};
+    currentShip = state.active.ship;
+    $("fit-name").value=row.name;
+    $("fit-quantity").value=row.quantity;
+    $("fit-ship-summary").scrollIntoView({behavior:"smooth",block:"center"});
+    save();renderFit();
+  }
+  async function findTypeByName(name, category) {
+    const params = new URLSearchParams({category,q:name});
+    const response = await fetch(`/api/fitting/catalog?${params}`);
+    if (!response.ok) throw new Error((await response.json()).detail || `HTTP ${response.status}`);
+    const {items} = await response.json();
+    return items.find(item=>item.name.toLocaleLowerCase()===name.toLocaleLowerCase()) || null;
+  }
+  async function importEft(text) {
+    const lines=text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+    const header=lines.shift();
+    const match=header?.match(/^\[([^,\]]+)(?:,\s*([^\]]+))?\]$/);
+    if(!match) throw new Error("EFT-Import erwartet eine erste Zeile wie [Drake, Fleet Drake].");
+    const shipName=match[1].trim(), fitName=(match[2]||shipName).trim();
+    $("fit-import-status").textContent="Schiff und Module werden im SDE gesucht …";
+    const shipItem=await findTypeByName(shipName,"ships");
+    if(!shipItem) throw new Error(`Schiff „${shipName}“ wurde im Katalog nicht gefunden.`);
+    const ship=await loadType(shipItem,"ship");
+    const modules=[],missing=[];
+    for(const line of lines) {
+      const [rawModuleName,rawChargeName]=line.split(",",2);
+      const moduleName=rawModuleName.trim();
+      if(!moduleName||/^empty\b/i.test(moduleName)||/^(offline|online)$/i.test(moduleName)) continue;
+      let found=await findTypeByName(moduleName,"modules"),category="module";
+      if(!found) { found=await findTypeByName(moduleName,"charges");category="charge"; }
+      if(!found) { missing.push(moduleName);continue; }
+      const module=await loadType(found,category);
+      module.slot=category==="charge"?"charge":(module.slot||$("fit-slot-choice").value);
+      modules.push(module);
+      const chargeName=rawChargeName?.trim();
+      if(chargeName) {
+        const chargeItem=await findTypeByName(chargeName,"charges");
+        if(chargeItem) modules.push(await loadType(chargeItem,"charge"));
+        else missing.push(chargeName);
+      }
+    }
+    state.active={ship,modules};
+    currentShip=ship;
+    $("fit-category").value="ships";
+    $("fit-search").value=ship.name;
+    $("fit-name").value=fitName;
+    $("fit-import-status").textContent=missing.length
+      ? `Fit geladen; nicht gefunden: ${missing.join(", ")}`
+      : `„${fitName}“ mit ${modules.length} Einträgen geladen. Jetzt prüfen und zur Fleet Comp hinzufügen.`;
+    save();renderFit();await loadGroups();
+  }
+  function importJson(text) {
+    const data=JSON.parse(text);
+    if(data.version!==1||!Array.isArray(data.fleet)||data.fleet.length>1000||data.fleet.some(row=>!validateImportedFit(row)||!Number.isInteger(row.quantity)||row.quantity<1||row.quantity>10000)) throw new Error("Ungültiges Fleet-JSON-Format.");
+    state.fleet=data.fleet.map(row=>({...row,id:makeId()}));save();renderFleet();
+    $("fit-import-status").textContent=`${state.fleet.length} Fittings in die Fleet Comp importiert. Über „Fit laden“ kannst du einzelne Einträge bearbeiten.`;
   }
   function drawChart(counts) {
     const canvas = $("fit-chart");
@@ -268,9 +386,11 @@
       ctx.fillStyle="#c8ffe6";ctx.fillText(value.toLocaleString("de-DE"),labelWidth+plotWidth+gap,y+rowHeight*.68);
     });
   }
-  $("fit-ship-search").addEventListener("input",event=>{clearTimeout(shipSearchTimer);shipSearchTimer=setTimeout(()=>searchCatalog("ships",event.target.value,$("fit-ship-results")),250);});
-  $("fit-module-search").addEventListener("input",event=>{clearTimeout(moduleSearchTimer);moduleSearchTimer=setTimeout(()=>searchCatalog("modules",event.target.value,$("fit-module-results")),250);});
-  $("fit-clear").addEventListener("click",()=>{state.active=emptyFit();currentShip=null;save();renderFit();});
+  $("fit-category").addEventListener("change",loadGroups);
+  $("fit-group").addEventListener("change",searchCatalog);
+  $("fit-search").addEventListener("input",()=>{clearTimeout(catalogTimer);catalogTimer=setTimeout(searchCatalog,250);});
+  $("fit-select-item").addEventListener("click",selectCatalogItem);
+  $("fit-clear").addEventListener("click",()=>{state.active=emptyFit();currentShip=null;$("fit-name").value="";save();renderFit();});
   $("fit-add-fleet").addEventListener("click",addFleetFit);
   $("fit-fleet-clear").addEventListener("click",()=>{state.fleet=[];save();renderFleet();});
   $("fit-export").addEventListener("click",()=>{
@@ -278,18 +398,40 @@
     const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download="eve-fleet.json";link.click();URL.revokeObjectURL(link.href);
   });
   $("fit-import-toggle").addEventListener("click",()=>{$("fit-import-area").hidden=!$("fit-import-area").hidden;});
-  $("fit-import").addEventListener("click",()=>{
+  $("fit-import-format").addEventListener("change",()=>{$("fit-import-data").placeholder=$("fit-import-format").value==="eft"?"[Drake, My Fleet Drake]\\nDamage Control II\\n10MN Afterburner II\\n...":'{"version":1,"fleet":[]}';});
+  $("fit-import-file").addEventListener("change",async event=>{
+    const file=event.target.files?.[0];
+    if(!file) return;
     try {
-      const data=JSON.parse($("fit-import-json").value);
-      if(data.version!==1||!Array.isArray(data.fleet)||data.fleet.some(row=>!row.ship||!Array.isArray(row.modules)||!Number.isInteger(row.quantity)||row.quantity<1||row.quantity>10000)) throw new Error("Ungültiges Fleet-Format.");
-      state.fleet=data.fleet.map(row=>({...row,id:makeId()}));save();renderFleet();$("fit-import-area").hidden=true;
-    } catch(error) { showError("Fleet-Import fehlgeschlagen: "+error.message); }
+      $("fit-import-data").value=await file.text();
+      if(file.name.toLowerCase().endsWith(".json")) $("fit-import-format").value="json";
+      else $("fit-import-format").value="eft";
+      $("fit-import-status").textContent=`${file.name} geladen.`;
+    } catch(error) { showError("Datei konnte nicht gelesen werden: "+error.message); }
+  });
+  $("fit-import").addEventListener("click",async()=>{
+    try {
+      clearError();
+      const text=$("fit-import-data").value;
+      if(!text.trim()) throw new Error("Bitte zuerst einen EFT-Text oder ein Fleet-JSON einfügen.");
+      if($("fit-import-format").value==="json") importJson(text);
+      else await importEft(text);
+    } catch(error) { showError("Import fehlgeschlagen: "+error.message); }
   });
   try {
     const saved=localStorage.getItem(storageKey);
-    if(saved) { const parsed=JSON.parse(saved);if(parsed&&parsed.active&&Array.isArray(parsed.fleet)){state=parsed;currentShip=state.active.ship;} }
+    if(saved) {
+      const parsed=JSON.parse(saved);
+      const activeValid=parsed?.active?.ship
+        ? validateImportedFit({ship:parsed.active.ship,modules:parsed.active.modules})
+        : !parsed?.active?.modules?.length;
+      const fleetValid=Array.isArray(parsed?.fleet)&&parsed.fleet.length<=1000&&parsed.fleet.every(row=>
+        validateImportedFit(row)&&Number.isInteger(row.quantity)&&row.quantity>=1&&row.quantity<=10000);
+      if(activeValid&&fleetValid) { state=parsed;currentShip=state.active.ship; }
+      else showError("Gespeicherte Fittings haben ein ungültiges Format und wurden nicht geladen.");
+    }
   } catch(error) { showError("Gespeicherte Flotte konnte nicht geladen werden: "+error.message); }
-  renderFit();renderFleet();
+  renderFit();renderFleet();loadGroups();
   window.addEventListener("resize",()=>drawChart(Object.fromEntries(state.fleet.map(row=>[row.ship.name,(state.fleet.filter(item=>item.ship.name===row.ship.name).reduce((sum,item)=>sum+item.quantity,0))]))));
 })();
 </script>
