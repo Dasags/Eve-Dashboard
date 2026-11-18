@@ -77,9 +77,16 @@ class ColonyPageTests(unittest.TestCase):
              "extractors": [{"product_type_id": 7, "seconds_left": -5, "heads": 1, "expiry_time": None}]},
         ]
         esi = AsyncMock()
-        esi.get = AsyncMock(return_value={"schematic_name": "Synthetic Oil"})
+        async def fake_get(path, **kwargs):
+            if "/universe/planets/5/" in path:
+                return {"name": "Alentene VII"}
+            if "/universe/planets/6/" in path:
+                return {"name": "Alentene II"}
+            return {"schematic_name": "Synthetic Oil"}
+
+        esi.get = AsyncMock(side_effect=fake_get)
         esi.__aenter__.return_value = esi
-        names = {5: "Alentene VII", 6: "Alentene II", 9: "Alentene", 7: "Proteins"}
+        names = {9: "Alentene", 7: "Proteins"}
         with (
             patch("app.main.storage.get_character", return_value={"scopes": [SCOPE]}),
             patch("app.main.ESIClient", return_value=esi),
@@ -99,6 +106,30 @@ class ColonyPageTests(unittest.TestCase):
         self.assertIn("CC-Stufe 4", second.text)
         self.assertNotIn("PI-TERMINAL", calc.text)
         self.assertIn("Produktionskette berechnen", calc.text)
+
+    def test_forbidden_esi_shows_scope_hint(self):
+        import httpx
+
+        request = httpx.Request("GET", "https://esi.evetech.net/x")
+        error = httpx.HTTPStatusError("403", request=request, response=httpx.Response(403, request=request))
+        with (
+            patch("app.main.storage.get_character", return_value={"scopes": [SCOPE]}),
+            patch("app.main.load_colonies", new=AsyncMock(side_effect=error)),
+        ):
+            response = self.client.get("/planetary-industry")
+        self.assertIn("HTTP 403", response.text)
+
+    def test_other_esi_status_is_shown(self):
+        import httpx
+
+        request = httpx.Request("GET", "https://esi.evetech.net/x")
+        error = httpx.HTTPStatusError("500", request=request, response=httpx.Response(500, request=request))
+        with (
+            patch("app.main.storage.get_character", return_value={"scopes": [SCOPE]}),
+            patch("app.main.load_colonies", new=AsyncMock(side_effect=error)),
+        ):
+            response = self.client.get("/planetary-industry")
+        self.assertIn("HTTP 500", response.text)
 
 
 if __name__ == "__main__":

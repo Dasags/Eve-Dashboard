@@ -1649,20 +1649,42 @@ async def colony_overview(character_id: int) -> dict:
     try:
         async with ESIClient(character_id) as esi:
             colonies = await load_colonies(esi, character_id)
-            ids = {c["planet_id"] for c in colonies} | {c["system_id"] for c in colonies if c["system_id"]}
+
+            async def safe(call, default):
+                try:
+                    return await call
+                except (httpx.HTTPError, OSError, RuntimeError, ValueError, KeyError):
+                    return default
+
+            ids = {c["system_id"] for c in colonies if c["system_id"]}
             ids |= {e["product_type_id"] for c in colonies for e in c["extractors"] if e["product_type_id"]}
-            names = await resolve_names(esi, ids)
-            schematic_ids = {sid for c in colonies for sid in c["factories"]}
+
+            async def planet(pid: int) -> tuple[int, str]:
+                data = await safe(esi.get(f"/universe/planets/{pid}/"), {})
+                return pid, data.get("name", f"Planet {pid}")
 
             async def schematic(sid: int) -> tuple[int, str]:
-                try:
-                    return sid, (await esi.get(f"/universe/schematics/{sid}/"))["schematic_name"]
-                except (httpx.HTTPError, KeyError):
-                    return sid, f"Schema {sid}"
+                data = await safe(esi.get(f"/universe/schematics/{sid}/"), {})
+                return sid, data.get("schematic_name", f"Schema {sid}")
 
-            schematic_names = dict(await asyncio.gather(*(schematic(sid) for sid in schematic_ids)))
-    except (httpx.HTTPError, OSError, RuntimeError, ValueError, KeyError):
-        info["error"] = "Die Kolonien konnten nicht aus ESI geladen werden. Bitte später erneut versuchen."
+            schematic_ids = {sid for c in colonies for sid in c["factories"]}
+            names, planet_names, schematic_pairs = await asyncio.gather(
+                safe(resolve_names(esi, ids), {}),
+                asyncio.gather(*(planet(c["planet_id"]) for c in colonies)),
+                asyncio.gather(*(schematic(sid) for sid in schematic_ids)),
+            )
+            names.update(dict(planet_names))
+            schematic_names = dict(schematic_pairs)
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        info["error"] = (
+            "ESI verweigert den Zugriff (HTTP 403). Der Token enthält den Planeten-Scope nicht – bitte den Charakter neu anmelden und die Berechtigung bestätigen."
+            if status in {401, 403}
+            else f"ESI-Fehler beim Laden der Kolonien (HTTP {status})."
+        )
+        return info
+    except (httpx.HTTPError, OSError, RuntimeError, ValueError, KeyError) as exc:
+        info["error"] = f"Die Kolonien konnten nicht aus ESI geladen werden ({type(exc).__name__}: {exc})."
         return info
     for colony in colonies:
         colony["planet_name"] = names.get(colony["planet_id"], f"Planet {colony['planet_id']}")
