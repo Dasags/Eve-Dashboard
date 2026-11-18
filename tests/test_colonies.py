@@ -100,6 +100,19 @@ class ColonyPageTests(unittest.TestCase):
             item.start()
             self.addCleanup(item.stop)
 
+    def test_character_tiles_replace_dropdown(self):
+        chars = [{"id": 1, "name": "Main Pilot", "is_main": True}, {"id": 2, "name": "Alt Pilot", "is_main": False}]
+        with (
+            patch("app.main.storage.get_character", return_value={"scopes": []}),
+            patch("app.main.storage.list_characters", return_value=chars),
+            patch("app.main.current_account", return_value=1),
+        ):
+            response = self.client.get("/planetary-industry")
+        self.assertIn("Main Pilot", response.text)
+        self.assertIn('name="character_id" value="2"', response.text)
+        self.assertIn('name="next" value="/planetary-industry"', response.text)
+        self.assertNotIn("<select", response.text.split("char-tiles")[-1].split("bpo-tabs")[0])
+
     def test_missing_scope_asks_for_new_login(self):
         with patch("app.main.storage.get_character", return_value={"scopes": []}):
             response = self.client.get("/planetary-industry")

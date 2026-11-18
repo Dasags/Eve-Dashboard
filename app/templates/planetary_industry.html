@@ -71,6 +71,7 @@
 </svg>
 {% endmacro %}
 <div class="eyebrow">Char-Dashboard · Produktion</div><h1>Planetary Industry</h1>
+{% set next_url = "/planetary-industry" %}{% include "_char_tiles.html" %}
 <div class="bpo-tabs" role="tablist" aria-label="PI-Bereiche">
   <a class="button {{ 'primary' if selected_tab == 'colonies' else '' }}" role="tab" aria-selected="{{ 'true' if selected_tab == 'colonies' else 'false' }}" href="/planetary-industry?tab=colonies">Kolonien ({{ overview.colonies|length if selected_tab == 'colonies' else '…' }})</a>
   <a class="button {{ 'primary' if selected_tab == 'calc' else '' }}" role="tab" aria-selected="{{ 'true' if selected_tab == 'calc' else 'false' }}" href="/planetary-industry?tab=calc">Rechner</a>

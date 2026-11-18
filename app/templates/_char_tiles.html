@@ -1,0 +1,23 @@
+{% if characters|length > 1 %}
+<style>
+  .char-tiles { display:flex; flex-wrap:wrap; gap:.6rem; margin:1rem 0; }
+  .char-tiles form { margin:0; }
+  .char-tile { display:flex; align-items:center; gap:.6rem; min-height:3.4rem; padding:.4rem .9rem .4rem .45rem; border:1px solid rgb(120 160 220 / 25%); border-radius:.7rem; background:rgb(10 18 32 / 38%); color:#dcecff; text-align:left; }
+  .char-tile img { width:40px; height:40px; border-radius:.45rem; background:#111b29; }
+  .char-tile small { display:block; color:#8d9cb1; font-size:.72rem; }
+  .char-tile:hover { border-color:#4774a2; }
+  .char-tile[aria-pressed="true"] { border-color:#3ddc97; box-shadow:0 0 12px rgb(61 220 151 / 25%); background:rgb(20 45 40 / 45%); }
+</style>
+<div class="char-tiles" role="group" aria-label="Charakter wählen">
+  {% for character in characters %}
+  <form method="post" action="/auth/chars/select">
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <input type="hidden" name="character_id" value="{{ character.id }}">
+    <button class="char-tile" aria-pressed="{{ 'true' if active_character and active_character.id == character.id else 'false' }}">
+      <img src="https://images.evetech.net/characters/{{ character.id }}/portrait?size=64" alt="" width="40" height="40" loading="lazy">
+      <span>{{ character.name }}<small>{{ "Main" if character.is_main else "Alt" }}</small></span>
+    </button>
+  </form>
+  {% endfor %}
+</div>
+{% endif %}
