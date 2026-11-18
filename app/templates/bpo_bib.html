@@ -1,13 +1,28 @@
 {% extends "base.html" %}
 {% block title %}BPO-Bib – {{ app_name }}{% endblock %}
+{% block head %}
+{% include "_terminal_style.html" %}
+<style>
+  .bpo-tabs { display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1rem; }
+  .bpo-tabs [aria-selected="true"] { border-color:#3ddc97;background:rgb(61 220 151 / 15%);color:#c8ffe6; }
+  .bpo-tab-panel[hidden] { display:none; }
+  .bpo-terminal { margin-top:1rem; }
+  .bpo-terminal th { color:#a5c7bd; }
+  .bpo-terminal tbody tr:hover { background:rgb(61 220 151 / 5%); }
+  .bpo-filter { display:grid;grid-template-columns:minmax(180px,1fr) minmax(160px,.7fr) auto;align-items:end;gap:.8rem;margin-top:.7rem; }
+  .bpo-filter label { min-width:0; }
+  @media(max-width:560px) { .bpo-filter { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
 {% block content %}
-<div class="eyebrow">Blueprint-Bibliothek · {{ active_character.name if active_character else "Charakter" }}</div>
+<div class="eyebrow">Char-Dashboard · Blueprint-Bibliothek · {{ active_character.name if active_character else "Charakter" }}</div>
 <h1>BPO-Bib</h1>
 {% set next_url = "/bpo-bib" %}{% include "_char_tiles.html" %}
-{% if inventory_error %}<div class="notice error">{{ inventory_error }}</div>{% endif %}
-<section class="panel">
+{% if inventory_error %}<div class="notice error pi-terminal bpo-terminal">{{ inventory_error }}</div>{% endif %}
+<section class="panel pi-terminal bpo-terminal">
+  <div class="eyebrow pi-mono">BLUEPRINT-TERMINAL // FILTER</div>
   <p class="hint">Eigene BPOs und BPCs getrennt von den Freigaben anderer Spieler. Unter „Meine Blueprints“ kannst du einzelne Einträge teilen; andere sehen deinen aktiven Charakter als Ansprechpartner.</p>
-  <form method="get" action="/bpo-bib" class="toolbar">
+  <form method="get" action="/bpo-bib" class="bpo-filter">
     <label>Blueprint suchen<input name="q" value="{{ q }}" maxlength="100" placeholder="z. B. Dragonfly"></label>
     <label>Gruppe<select name="group"><option value="">Alle Gruppen</option>
       {% for item in groups %}<option value="{{ item }}" {% if selected_group == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
@@ -20,7 +35,7 @@
   <button type="button" role="tab" id="tab-own" aria-controls="panel-own" aria-selected="{{ 'true' if selected_tab == 'own' else 'false' }}" class="{{ 'primary' if selected_tab == 'own' else '' }}">Meine Blueprints ({{ own|length }})</button>
   <button type="button" role="tab" id="tab-shared" aria-controls="panel-shared" aria-selected="{{ 'true' if selected_tab == 'shared' else 'false' }}" class="{{ 'primary' if selected_tab == 'shared' else '' }}">Freigegeben ({{ shared|length }})</button>
 </div>
-<section class="panel bpo-tab-panel" role="tabpanel" id="panel-own" aria-labelledby="tab-own" style="margin-top:1rem">
+<section class="panel pi-terminal bpo-terminal bpo-tab-panel" role="tabpanel" id="panel-own" aria-labelledby="tab-own">
 {% if not has_blueprint_scope %}
   <p>Für den eigenen Blueprint-Bestand fehlt <code>esi-characters.read_blueprints.v1</code>. Bitte den Charakter mit dieser zusätzlichen EVE-Berechtigung erneut anmelden. Freigegebene Blueprints anderer Spieler bleiben im eigenen Reiter sichtbar.</p>
   <a class="button primary" href="/auth/login?add_alt=true">EVE-Berechtigungen erneuern</a>
@@ -45,7 +60,7 @@
   </tbody></table></div>
 {% endif %}
 </section>
-<section class="panel bpo-tab-panel" role="tabpanel" id="panel-shared" aria-labelledby="tab-shared" style="margin-top:1rem">
+<section class="panel pi-terminal bpo-terminal bpo-tab-panel" role="tabpanel" id="panel-shared" aria-labelledby="tab-shared">
   <h2>Von anderen Spielern freigegeben</h2>
   <p class="hint">Schreibe den angezeigten Charakter im Spiel an, um eine Leihe oder Zusammenarbeit abzusprechen. Eine Freigabe überträgt keinen Gegenstand.</p>
   <div class="table-wrap"><table><thead><tr><th>Gruppe</th><th>Blueprint</th><th>Typ</th><th>ME</th><th>TE</th><th>Runs</th><th>Ansprechpartner</th></tr></thead><tbody>
@@ -61,13 +76,6 @@
     {% else %}<tr><td colspan="7">Noch keine passenden Freigaben vorhanden.</td></tr>{% endfor %}
   </tbody></table></div>
 </section>
-{% endblock %}
-{% block head %}
-<style>
-  .bpo-tabs { display:flex; flex-wrap:wrap; gap:.6rem; margin-top:1rem; }
-  .bpo-tabs [aria-selected="true"] { border-color:#4774a2; background:#17304a; }
-  .bpo-tab-panel[hidden] { display:none; }
-</style>
 {% endblock %}
 {% block scripts %}
 <script>

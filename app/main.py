@@ -413,7 +413,7 @@ def select_character(
     if not storage.character_belongs_to(character_id, account_id):
         raise HTTPException(404, "Charakter gehört nicht zu diesem Konto.")
     request.session["character_id"] = character_id
-    target = next if next in {"/", "/wallet", "/wallet/distribution", "/skills", "/assets", "/bpo-bib", "/planetary-industry"} else "/dashboard"
+    target = next if next in {"/", "/wallet", "/wallet/distribution", "/skills", "/assets", "/bpo-bib", "/industry", "/planetary-industry"} else "/dashboard"
     return RedirectResponse(target, status_code=303)
 
 

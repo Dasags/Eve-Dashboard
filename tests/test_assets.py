@@ -159,6 +159,8 @@ class AssetRouteTests(unittest.TestCase):
         self.assertNotIn("Rifter</td>", response.text)
         self.assertIn("1000000001234", response.text)
         self.assertIn("Standortname oder Zugriff fehlt", response.text)
+        self.assertIn("ASSET-TERMINAL // LAGERBESTÄNDE", response.text)
+        self.assertIn('class="panel pi-terminal asset-terminal"', response.text)
 
     def test_filter_form_accepts_empty_selections_and_validates_ids(self):
         inventory = [
@@ -287,6 +289,8 @@ class BlueprintLibraryRouteTests(unittest.TestCase):
         self.assertIn('id="tab-own" aria-controls="panel-own" aria-selected="false"', response.text)
         self.assertIn('id="tab-shared" aria-controls="panel-shared" aria-selected="true"', response.text)
         self.assertIn('name="tab" value="shared"', response.text)
+        self.assertIn("BLUEPRINT-TERMINAL // FILTER", response.text)
+        self.assertIn('class="panel pi-terminal bpo-terminal bpo-tab-panel"', response.text)
 
     def test_blueprint_api_scope_is_requested_for_existing_characters(self):
         from app.services.eve import SCOPE_NAMES
