@@ -9,6 +9,11 @@ MAX_QUANTITY = 1_000_000_000_000
 QUANTITY = re.compile(r"(?:\d+|\d{1,3}(?:[., '\u00a0\u202f]\d{3})+)")
 
 
+def normalize_name(value: str) -> str:
+    """Drop the client's trailing '*' marker and normalize whitespace/case."""
+    return " ".join(value.replace("\u00a0", " ").strip().rstrip("*").split()).casefold()
+
+
 def parse_inventory(text: str) -> tuple[dict[str, int], list[str]]:
     if len(text) > 30000:
         raise ValueError("Die Eingabe ist zu lang (maximal 30.000 Zeichen).")
@@ -28,7 +33,10 @@ def parse_inventory(text: str) -> tuple[dict[str, int], list[str]]:
             errors.append(f"Zeile {number}: Name und ganzzahlige Menge nicht erkannt: {line[:160]}")
             continue
         quantity = int(re.sub(r"[., '\u00a0\u202f]", "", columns[1]))
-        name = columns[0].casefold()
+        name = normalize_name(columns[0])
+        if not name:
+            errors.append(f"Zeile {number}: Gegenstandsname nicht erkannt: {line[:160]}")
+            continue
         if quantity <= 0 or entries.get(name, 0) + quantity > MAX_QUANTITY:
             errors.append(f"Zeile {number}: Menge muss zwischen 1 und {MAX_QUANTITY} liegen.")
             continue
@@ -38,7 +46,7 @@ def parse_inventory(text: str) -> tuple[dict[str, int], list[str]]:
 
 def calculate(entries: dict[str, int], types: list[dict], materials: list[dict], yield_percent: Decimal) -> dict:
     type_rows = {as_int(row, "typeID"): row for row in types}
-    by_name = {field(row, "typeName").casefold(): type_id for type_id, row in type_rows.items()}
+    by_name = {normalize_name(field(row, "typeName")): type_id for type_id, row in type_rows.items()}
     recipes: dict[int, list[tuple[int, int]]] = defaultdict(list)
     for row in materials:
         source, material, quantity = (as_int(row, key) for key in ("typeID", "materialTypeID", "quantity"))
@@ -49,8 +57,11 @@ def calculate(entries: dict[str, int], types: list[dict], materials: list[dict],
     for name, quantity in entries.items():
         type_id = by_name.get(name)
         row = type_rows.get(type_id)
-        if not row or type_id not in recipes:
-            errors.append(f"Nicht gefunden oder nicht wiederaufbereitbar: {name}")
+        if not row:
+            errors.append(f"Gegenstand nicht in der SDE gefunden (englischer Name?): {name}")
+            continue
+        if type_id not in recipes:
+            errors.append(f"Nicht wiederaufbereitbar (keine Recyclingdaten): {field(row, 'typeName')}")
             continue
         portion = as_int(row, "portionSize")
         if portion <= 0:

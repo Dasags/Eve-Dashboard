@@ -34,6 +34,15 @@ class RefineryCalculationTests(unittest.TestCase):
         self.assertEqual([(x["processed"], x["remainder"]) for x in result["inputs"]], [(1100, 0), (200, 50)])
         self.assertEqual({x["name"]: x["quantity"] for x in result["outputs"]}, {"Tritanium": 3080, "Heavy Water": 35})
 
+    def test_client_asterisk_and_distinct_errors(self):
+        entries, errors = parse_inventory("Veldspar*\t200\nVELDSPAR *\t100\nTritanium\t5\nNope\t1")
+        self.assertEqual(errors, [])
+        self.assertEqual(entries["veldspar"], 300)
+        result = calculate(entries, TYPES, MATERIALS, Decimal("50"))
+        self.assertEqual(result["outputs"][0]["quantity"], 600)
+        self.assertIn("nicht wiederaufbereitbar", result["errors"][0].lower())
+        self.assertIn("nicht in der SDE", result["errors"][1])
+
     def test_rounding_zero_lots_unknown_and_invalid(self):
         entries, errors = parse_inventory("Veldspar\t101\nUnknown\t4\nbad input\nVeldspar\t0")
         self.assertEqual(len(errors), 2)
