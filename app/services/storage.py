@@ -226,6 +226,7 @@ def initialize() -> None:
                 ("wallet", 0),
                 ("assets", 0),
                 ("industry", 0),
+                ("refinery", 0),
                 ("incursions", 0),
                 ("marketwatcher", 0),
                 ("planetary-industry", 0),
