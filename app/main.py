@@ -7,6 +7,7 @@ import secrets
 import sqlite3
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
@@ -29,6 +30,8 @@ from app.services.market import quote as get_market_quote
 from app.services.market import sell_prices as get_sell_prices
 from app.services.market import resolve_type_ids
 from app.services.market import adjusted_prices as get_adjusted_prices
+from app.services.market import station_order_prices
+from app.services.refinery import apply_prices as apply_refinery_prices, calculate as calculate_refinery, parse_inventory
 from app.services.invention import DECRYPTORS, apply_invention, plan_invention
 from app.services.fitting import (
     CHARGE_CATEGORY_ID,
@@ -42,7 +45,7 @@ from app.services.fitting_sde import build_market_tree, fits_hull, hull_profile,
 from app.services.production import apply_market_and_stock, create_plan, skill_time_factor
 from app.services.colonies import SCOPE as PLANET_SCOPE, factory_rings, load_colonies, storage_fill
 from app.services.planetary import add_location_prices, analyze as analyze_planetary, create_plan as create_planetary_plan, product_catalog
-from app.services.sde import as_int, field, invention_recipes, load_sde, manufacturing_recipes, planetary_recipes, type_catalog
+from app.services.sde import as_int, field, invention_recipes, load_reprocessing_materials, load_sde, manufacturing_recipes, planetary_recipes, type_catalog
 
 APP_NAME = os.getenv("APP_NAME", "EVE-World")
 MODULE_DETAILS = {
@@ -52,6 +55,7 @@ MODULE_DETAILS = {
     "assets": ("Assets", "Gegenstände und Schiffe mit Standort und Marktvergleich."),
     "bpo-bib": ("BPO-Bib", "Eigene Blueprint-Originale und Kopien, ME/TE sowie freigegebene Blueprints."),
     "industry": ("Industry", "Produktionskosten, Materialbedarf und Lagerbestand."),
+    "refinery": ("Refinery", "Erze, Eis und andere Gegenstände aufbereiten und Jita-Preise vergleichen."),
     "incursions": ("Incursion", "Aktuelle Sansha-Incursions aus öffentlichen ESI-Daten."),
     "marketwatcher": ("Marketwatcher", "Item-Listen und regionale Marktpreise."),
     "planetary-industry": ("Planetary Industry", "PI-Produktionsketten und Standortpreise."),
@@ -183,6 +187,7 @@ def render(request: Request, page: str, **context):
         "planetary-industry",
         "fitting",
         "industry",
+        "refinery",
         "marketwatcher",
         "incursions",
     )
@@ -1653,6 +1658,47 @@ def industry_page(request: Request):
         skill_note=None,
         decryptors=list(DECRYPTORS),
     )
+
+
+@app.get("/refinery")
+def refinery_page(request: Request):
+    require_account(request)
+    require_module(request, "refinery")
+    return render(request, "refinery.html", inventory="", yield_percent="70", result=None, error=None)
+
+
+@app.post("/refinery/calculate")
+async def refinery_calculate(request: Request, inventory: str = Form(""), yield_percent: str = Form("70")):
+    require_account(request)
+    require_module(request, "refinery")
+    result, error = None, None
+    try:
+        if len(yield_percent) > 20:
+            raise ValueError("Die Refinery-Ausbeute ist zu lang.")
+        try:
+            percentage = Decimal(yield_percent.strip().replace(",", "."))
+        except InvalidOperation as exc:
+            raise ValueError("Bitte eine gültige Refinery-Ausbeute eingeben.") from exc
+        if not percentage.is_finite() or not 0 <= percentage <= 100:
+            raise ValueError("Die Refinery-Ausbeute muss zwischen 0 und 100 % liegen.")
+        entries, errors = parse_inventory(inventory)
+        if not entries:
+            raise ValueError("Bitte mindestens eine gültige Zeile mit Name und Menge einfügen. " + " ".join(errors))
+        sde, materials = await asyncio.gather(load_sde(), load_reprocessing_materials())
+        result = calculate_refinery(entries, sde["invTypes"], materials, percentage)
+        result["errors"] = errors + result["errors"]
+        ids = sorted({row["type_id"] for row in result["inputs"] + result["outputs"] if row.get("processed", row["quantity"]) > 0})
+        try:
+            prices = await station_order_prices(
+                {"kind": "station", "region_id": 10000002, "location_id": 60003760}, ids
+            ) if ids else {}
+        except (httpx.HTTPError, OSError, RuntimeError, ValueError) as exc:
+            prices = {}
+            result["market_error"] = str(exc) or "Jita-Marktdaten sind nicht erreichbar."
+        apply_refinery_prices(result, prices)
+    except (httpx.HTTPError, OSError, RuntimeError, ValueError) as exc:
+        error = str(exc) or "SDE- oder Marktdaten sind momentan nicht erreichbar."
+    return render(request, "refinery.html", inventory=inventory, yield_percent=yield_percent, result=result, error=error)
 
 
 @app.post("/industry/calculate")

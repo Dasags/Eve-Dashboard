@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Refinery – {{ app_name }}{% endblock %}
+{% block head %}
+{% include "_terminal_style.html" %}
+<style>
+  .refinery-form,.refinery-results { display:grid;gap:1rem;margin-top:1rem; }
+  .refinery-terminal { min-width:0; }
+  .refinery-terminal textarea { min-height:13rem;font-family:ui-monospace,Consolas,monospace; }
+  .refinery-stat { border-color:rgb(61 220 151 / 18%);background:rgb(61 220 151 / 5%); }
+  .refinery-stat strong { color:#c8ffe6;overflow-wrap:anywhere; }
+  .refinery-terminal tbody tr:hover { background:rgb(61 220 151 / 5%); }
+</style>
+{% endblock %}
+{% block content %}
+<div class="eyebrow">Char-Dashboard · Rohstoffe</div><h1>Refinery</h1>
+<form action="/refinery/calculate" method="post" class="refinery-form">
+  <section class="panel pi-terminal refinery-terminal">
+    <div class="eyebrow pi-mono">REFINERY-TERMINAL // EINGABE</div>
+    <h2>Erze und Eis aufbereiten</h2>
+    <label>Gegenstände aus EVE einfügen<textarea name="inventory" required placeholder="Veldspar&#9;10,000&#10;Compressed Blue Ice&#9;100">{{ inventory }}</textarea></label>
+    <p class="hint">Im Spiel Gegenstände markieren, kopieren und hier einfügen. Pro Zeile Gegenstandsname und Menge, durch Tab getrennt; englische EVE-Namen verwenden. Auch andere Gegenstände mit SDE-Recyclingdaten werden unterstützt.</p>
+    <div class="form-grid"><label>Gesamtausbeute der Refinery %<input type="number" name="yield_percent" min="0" max="100" step="any" value="{{ yield_percent }}" required></label></div>
+    <p class="hint">Die effektive Ausbeute aus dem Spiel eintragen – inklusive Skills, Anlage und Rigs. Keine Berechnung dieser Boni. Die Ausbeute gilt für alle eingefügten Gegenstände.</p>
+    <div class="form-actions"><button class="primary">Aufbereitung berechnen</button></div>
+  </section>
+</form>
+{% if error %}<p class="notice error pi-terminal" role="alert">{{ error }}</p>{% endif %}
+{% if result %}
+<div class="refinery-results">
+  {% if result.errors %}<div class="notice error pi-terminal" role="alert"><strong>Unvollständige Eingabe:</strong><ul>{% for message in result.errors %}<li>{{ message }}</li>{% endfor %}</ul>Gesamtsummen sind daher nicht vollständig berechenbar.</div>{% endif %}
+  {% if result.market_error %}<p class="notice error pi-terminal" role="alert">{{ result.market_error }}</p>{% endif %}
+  {% for item in result.inputs + result.outputs %}{% if item.price_error %}<p class="notice error pi-terminal" role="alert">Marktpreis für {{ item.name }}: {{ item.price_error }}</p>{% endif %}{% endfor %}
+  <section class="panel pi-terminal refinery-terminal">
+    <div class="eyebrow pi-mono">REFINERY-TERMINAL // MARKTVERGLEICH</div><h2>Jita 4-4 · Preisübersicht</h2>
+    <div class="grid two">
+      {% for title, value in [("Rohstoffe · Buy", result.inputs_highest_buy), ("Ergebnis · Buy", result.outputs_highest_buy), ("Rohstoffe · Sell", result.inputs_lowest_sell), ("Ergebnis · Sell", result.outputs_lowest_sell)] %}
+      <div class="card refinery-stat"><span class="eyebrow">{{ title }}</span><p><strong>{{ (value|isk ~ " ISK") if value is not none else "Nicht vollständig" }}</strong></p></div>
+      {% endfor %}
+    </div>
+    <p class="hint">Höchste Kauforder (Buy) bzw. niedrigste Verkaufsorder (Sell), Jita 4-4. Nur tatsächlich aufbereitbare Eingaben werden bewertet; Restmengen bleiben außen vor. Momentaufnahme ohne Ordervolumen, Gebühren, Steuern, Transport oder Refinery-Abzüge. Kein garantierter Erlös.</p>
+  </section>
+  <section class="panel pi-terminal refinery-terminal">
+    <div class="eyebrow pi-mono">REFINERY-TERMINAL // EINGANG</div><h2>Eingang &amp; Restmengen</h2>
+    <div class="table-wrap"><table><thead><tr><th>Gegenstand</th><th>Menge</th><th>Losgröße</th><th>Aufbereitet</th><th>Rest</th><th>Jita Buy / Stk.</th><th>Jita Sell / Stk.</th></tr></thead><tbody>
+      {% for item in result.inputs %}<tr><td>{{ item.name }}</td><td>{{ item.quantity }}</td><td>{{ item.portion }}</td><td>{{ item.processed }}</td><td>{{ item.remainder }}</td><td>{{ item.highest_buy|isk if item.highest_buy is not none else "—" }}</td><td>{{ item.lowest_sell|isk if item.lowest_sell is not none else "—" }}</td></tr>{% else %}<tr><td colspan="7">Keine aufbereitbaren Gegenstände erkannt.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  <section class="panel pi-terminal refinery-terminal">
+    <div class="eyebrow pi-mono">REFINERY-TERMINAL // AUSGANG</div><h2>Mineralien &amp; Produkte</h2>
+    <div class="table-wrap"><table><thead><tr><th>Material</th><th>Menge</th><th>Jita Buy / Stk.</th><th>Buy gesamt</th><th>Jita Sell / Stk.</th><th>Sell gesamt</th></tr></thead><tbody>
+      {% for item in result.outputs %}<tr><td>{{ item.name }}</td><td>{{ item.quantity }}</td><td>{{ item.highest_buy|isk if item.highest_buy is not none else "—" }}</td><td>{{ item.highest_buy_value|isk if item.highest_buy_value is not none else "—" }}</td><td>{{ item.lowest_sell|isk if item.lowest_sell is not none else "—" }}</td><td>{{ item.lowest_sell_value|isk if item.lowest_sell_value is not none else "—" }}</td></tr>{% else %}<tr><td colspan="6">Kein Materialertrag bei diesen Mengen und dieser Ausbeute.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="hint">Schätzung aus SDE-Materialmengen und Losgrößen: je Gegenstand und Material werden vollständige Lose zusammengefasst und der Ertrag abgerundet. Abweichungen zur Spielvorschau sind möglich. „—“ bedeutet: keine Order oder Marktdaten nicht erreichbar.</p>
+  </section>
+</div>
+{% endif %}
+{% endblock %}

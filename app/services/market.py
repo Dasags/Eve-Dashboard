@@ -169,6 +169,29 @@ async def sell_prices(location: dict, type_ids: list[int]) -> dict[int, dict]:
         return dict(await asyncio.gather(*(station_price(type_id) for type_id in type_ids)))
 
 
+async def station_order_prices(location: dict, type_ids: list[int]) -> dict[int, dict]:
+    """Fetch best buy and sell orders at one NPC station."""
+    if location["kind"] != "station":
+        raise ValueError("Für den Preisvergleich wird eine NPC-Station benötigt.")
+    region_id = await _resolve_region(location)
+    semaphore = asyncio.Semaphore(3)
+    async with ESIClient() as esi:
+        async def station_price(type_id: int) -> tuple[int, dict]:
+            try:
+                async with semaphore:
+                    orders = await _paginated_orders(
+                        esi, f"/markets/{region_id}/orders/", {"order_type": "all", "type_id": type_id}
+                    )
+                relevant = [row for row in orders if row["type_id"] == type_id and row["location_id"] == location["location_id"]]
+                buy = [float(row["price"]) for row in relevant if row["is_buy_order"]]
+                sell = [float(row["price"]) for row in relevant if not row["is_buy_order"]]
+                return type_id, {"highest_buy": max(buy) if buy else None, "lowest_sell": min(sell) if sell else None, "error": None}
+            except (httpx.HTTPError, ValueError, RuntimeError) as exc:
+                return type_id, {"highest_buy": None, "lowest_sell": None, "error": str(exc) or "Marktdaten nicht erreichbar"}
+
+        return dict(await asyncio.gather(*(station_price(type_id) for type_id in type_ids)))
+
+
 async def resolve_type_ids(names: list[str]) -> dict[str, int]:
     cleaned = list(dict.fromkeys(name.strip() for name in names if name.strip()))
     if not cleaned:

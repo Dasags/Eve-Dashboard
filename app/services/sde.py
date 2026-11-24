@@ -1,5 +1,6 @@
 import asyncio
 import csv
+import io
 import time
 from pathlib import Path
 
@@ -24,6 +25,9 @@ TTL_SECONDS = 7 * 24 * 60 * 60
 _cache: dict[str, list[dict[str, str]]] = {}
 _cached_at = 0.0
 _lock = asyncio.Lock()
+_materials_cache: list[dict[str, str]] | None = None
+_materials_cached_at = 0.0
+_materials_lock = asyncio.Lock()
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -70,6 +74,44 @@ async def load_sde() -> dict[str, list[dict[str, str]]]:
         _cache = {name: _read_csv(path) for name, path in paths.items()}
         _cached_at = time.monotonic()
         return _cache
+
+
+async def load_reprocessing_materials() -> list[dict[str, str]]:
+    """Load the optional reprocessing table without affecting other SDE consumers."""
+    global _materials_cache, _materials_cached_at
+    if _materials_cache is not None and time.monotonic() - _materials_cached_at < TTL_SECONDS:
+        return _materials_cache
+    async with _materials_lock:
+        if _materials_cache is not None and time.monotonic() - _materials_cached_at < TTL_SECONDS:
+            return _materials_cache
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        path = CACHE_DIR / "invTypeMaterials.csv"
+        if not path.exists() or time.time() - path.stat().st_mtime >= TTL_SECONDS:
+            try:
+                async with httpx.AsyncClient(timeout=90, follow_redirects=True) as client:
+                    response = await client.get(f"{BASE_URL}/invTypeMaterials.csv")
+                response.raise_for_status()
+                if not response.text.strip():
+                    raise ValueError("Leere SDE-Datei erhalten: invTypeMaterials.csv")
+                downloaded = list(csv.DictReader(io.StringIO(response.text.lstrip("\ufeff"))))
+                if not downloaded or not {"typeid", "materialtypeid", "quantity"} <= {
+                    key.casefold() for key in downloaded[0]
+                }:
+                    raise ValueError("Ungültige SDE-Datei: invTypeMaterials.csv")
+                temporary = path.with_suffix(".csv.tmp")
+                temporary.write_text(response.text, encoding="utf-8")
+                temporary.replace(path)
+            except (httpx.HTTPError, OSError, ValueError):
+                if not path.exists():
+                    raise
+        rows = _read_csv(path)
+        if not rows or not {"typeid", "materialtypeid", "quantity"} <= {
+            key.casefold() for key in rows[0]
+        }:
+            raise ValueError("Ungültige SDE-Datei: invTypeMaterials.csv")
+        _materials_cache = rows
+        _materials_cached_at = time.monotonic()
+        return rows
 
 
 def field(row: dict[str, str], *names: str, default: str = "") -> str:
